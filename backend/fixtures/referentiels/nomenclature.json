@@ -1,0 +1,33 @@
+{
+  "titres": [
+    {"code": "1", "libelle": "Dette"},
+    {"code": "2", "libelle": "Personnel"},
+    {"code": "3", "libelle": "Biens et services"},
+    {"code": "4", "libelle": "Transferts"},
+    {"code": "5", "libelle": "Investissement"}
+  ],
+  "types_procedure": [
+    {"libelle": "Procedure normale", "paiement_hors_chaine": false},
+    {"libelle": "Procedure Normale MP", "paiement_hors_chaine": false},
+    {"libelle": "Procedure Normale Amenagee", "paiement_hors_chaine": false},
+    {"libelle": "Procedure Normale Amenagee MP", "paiement_hors_chaine": false},
+    {"libelle": "Procedure Normale devise", "paiement_hors_chaine": false},
+    {"libelle": "Procedure.amenagee devise", "paiement_hors_chaine": false},
+    {"libelle": "Procedure Solde", "paiement_hors_chaine": true, "description": "Salaires payés hors chaîne"},
+    {"libelle": "Debit d'office - NE PAS PAYER", "paiement_hors_chaine": true, "description": "Dette payée par débit d'office"},
+    {"libelle": "Regul.PCT - NE PAS PAYER", "paiement_hors_chaine": true, "description": "Régularisation PCT"}
+  ],
+  "etats_dossier": [
+    {"libelle": "Depense engagee", "engagement_valide": true},
+    {"libelle": "Nouvel engagement", "engagement_valide": false},
+    {"libelle": "Nouvel eng. edite", "engagement_valide": false},
+    {"libelle": "Projet d'engagement", "engagement_valide": false},
+    {"libelle": "Nouvel engagement R", "engagement_valide": false},
+    {"libelle": "Nouvel eng.edite R", "engagement_valide": false}
+  ],
+  "regulations": ["00", "01", "02", "03", "04", "05", "10", "20", "30", "51", "54", "55", "80", "90", "xx"],
+  "types_budget": [
+    {"code": "000", "libelle": ""},
+    {"code": "104", "libelle": ""}
+  ]
+}

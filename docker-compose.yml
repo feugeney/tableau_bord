@@ -1,0 +1,117 @@
+# Système intégré de pilotage des finances publiques — MEFB (République de Guinée)
+# Démarrage : cp .env.example .env && (générer les certificats, voir README) && docker compose up -d --build
+
+x-backend: &backend
+  build: ./backend
+  env_file: .env
+  environment: &backend-env
+    POSTGRES_HOST: db
+    POSTGRES_PORT: "5432"
+    REDIS_URL: redis://redis:6379/0
+    # Tâches et événements sur RabbitMQ (AMQP 0.9.1) ; Redis reste le cache.
+    CELERY_BROKER_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672//
+    DEPOT_ROOT: /app/depot
+  volumes:
+    - media:/app/media
+    - depot:/app/depot
+  depends_on:
+    db:
+      condition: service_healthy
+    redis:
+      condition: service_started
+    rabbitmq:
+      condition: service_healthy
+  restart: unless-stopped
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    volumes:
+      - rabbitmq:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      retries: 10
+    restart: unless-stopped
+
+  # Dépôt de fichiers des partenaires : compte « depot », authentification par clé uniquement
+  # (clés publiques dans ./sftp/cles/*.pub). Un sous-dossier par source, relevé par le service « worker ».
+  sftp:
+    image: atmoz/sftp:alpine
+    command: ["depot::1000:1000"]
+    ports:
+      - "${SFTP_PORT:-2222}:22"
+    volumes:
+      - depot:/home/depot/sources
+      - ./sftp/cles:/home/depot/.ssh/keys:ro
+      - sftp-hote:/etc/ssh/cles-hote
+      - ./sftp/cles-hote.sh:/etc/sftp.d/cles-hote.sh:ro
+    depends_on:
+      - backend   # le volume « depot » est créé par le backend, avec les bons droits
+    restart: unless-stopped
+
+  backend:
+    <<: *backend
+    environment:
+      <<: *backend-env
+      RUN_MIGRATIONS: "1"
+    volumes:
+      - media:/app/media
+      - depot:/app/depot
+      - static:/app/staticfiles
+
+  worker:
+    <<: *backend
+    command: ["celery", "-A", "config", "worker", "-l", "info", "--concurrency", "2"]
+
+  beat:
+    <<: *backend
+    command: ["celery", "-A", "config", "beat", "-l", "info"]
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+      - static:/srv/static:ro
+    depends_on:
+      - backend
+      - frontend
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  media:
+  static:
+  depot:
+  rabbitmq:
+  sftp-hote:

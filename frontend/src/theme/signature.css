@@ -1,0 +1,46 @@
+/*
+ * Signature République de Guinée. Les couleurs du drapeau ne sont utilisées QUE dans ce fichier,
+ * pour : le filet sous l'en-tête, le pied de page, l'écran de connexion, l'impression et le mini-drapeau.
+ * Elles ne portent jamais une donnée ni un état.
+ */
+
+.filet-tricolore {
+  height: 4px;
+  background: linear-gradient(
+    to right,
+    var(--gn-rouge) 0 33.333%,
+    var(--gn-jaune) 33.333% 66.666%,
+    var(--gn-vert) 66.666% 100%
+  );
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+.filet-tricolore-fin {
+  height: 2px;
+}
+
+.filet-tricolore-vertical {
+  width: 4px;
+  background: linear-gradient(
+    to bottom,
+    var(--gn-rouge) 0 33.333%,
+    var(--gn-jaune) 33.333% 66.666%,
+    var(--gn-vert) 66.666% 100%
+  );
+}
+
+.mini-drapeau {
+  display: inline-block;
+  width: 18px;
+  height: 12px;
+  background: linear-gradient(
+    to right,
+    var(--gn-rouge) 0 33.333%,
+    var(--gn-jaune) 33.333% 66.666%,
+    var(--gn-vert) 66.666% 100%
+  );
+  outline: 1px solid color-mix(in srgb, var(--on-navy) 35%, transparent);
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}

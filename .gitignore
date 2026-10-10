@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.coverage
+htmlcov/
+backend/media/
+backend/staticfiles/
+# Node
+node_modules/
+frontend/dist/
+coverage/
+# Secrets et données sensibles
+.env
+backend/.env
+nginx/certs/*.key
+nginx/certs/*.crt
+*.xlsx
+!backend/tests/**/*.xlsx
+# Outils et fichiers générés
+.ruff_cache/
+*.tsbuildinfo
+# Captures d'écran de vérification (peuvent montrer des chiffres réels)
+captures/
+# Dépôt SFTP et clés des partenaires (propres à chaque installation)
+backend/depot/
+sftp/cles/*.pub

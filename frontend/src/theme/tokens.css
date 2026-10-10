@@ -1,0 +1,111 @@
+/*
+ * Jetons de design — Système intégré de pilotage des finances publiques (MEFB, République de Guinée).
+ * Seul fichier où figurent des valeurs de couleur. Les composants n'utilisent que ces variables.
+ */
+
+:root {
+  /* Base institutionnelle */
+  --navy: #16314e;
+  --gold: #b8860b;
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --ink: #0e1a28;
+  --ink-2: #4a5668;
+  --ink-3: #6b7686; /* 4,6:1 sur --surface ; à réserver aux cartes (4,2:1 sur --bg) */
+
+  /* Dérivés validés */
+  --border: #dce2ea;
+  --grid: #e8ecf1;
+  --gold-tint: color-mix(in srgb, var(--gold) 8%, var(--surface));
+  --focus: var(--gold);
+  --zebra: color-mix(in srgb, var(--bg) 55%, var(--surface));
+  --hover: color-mix(in srgb, var(--navy) 6%, var(--surface));
+  --on-navy: #ffffff;
+  --on-navy-2: color-mix(in srgb, #ffffff 78%, var(--navy));
+  --champ-navy: color-mix(in srgb, #ffffff 12%, var(--navy));
+
+  /* Signature République de Guinée : jamais pour une donnée ni un état */
+  --gn-rouge: #ce1126;
+  --gn-jaune: #fcd116;
+  --gn-vert: #009460;
+
+  /* États (alertes et statuts) — toujours avec icône et libellé */
+  --etat-bon: #0ca30c;
+  --etat-vigilance: #fab219;
+  --etat-serieux: #ec835a;
+  --etat-critique: #d03b3b;
+  --sur-etat: #0e1a28; /* pictogramme posé sur une couleur d'état (identique dans les deux thèmes) */
+
+  /* Données : rampe bleue (phases), séries catégorielles validées CVD */
+  --phase-1: #86b6ef;
+  --phase-2: #5598e7;
+  --phase-3: #2a78d6;
+  --phase-4: #1c5cab;
+  --phase-5: #184f95;
+  --phase-6: #104281;
+  --serie-1: #2a78d6;
+  --serie-2: #b8860b;
+  --objectif: var(--ink-2);
+
+  /* Variables du thème shadcn/ui */
+  --background: var(--bg);
+  --foreground: var(--ink);
+  --card: var(--surface);
+  --card-foreground: var(--ink);
+  --popover: var(--surface);
+  --popover-foreground: var(--ink);
+  --primary: var(--navy);
+  --primary-foreground: var(--on-navy);
+  --muted: var(--bg);
+  --muted-foreground: var(--ink-2);
+  --accent: var(--hover);
+  --accent-foreground: var(--ink);
+  --ring: var(--focus);
+  --input: var(--border);
+  --radius: 6px;
+
+  color-scheme: light;
+}
+
+/* Thème sombre : conçu à part, pas une inversion. Le filet tricolore reste identique. */
+:root.dark {
+  --navy: #0c1d31;
+  --gold: #d4a537;
+  --bg: #0b1420;
+  --surface: #122033;
+  --ink: #eef2f7;
+  --ink-2: #b5c0cf;
+  --ink-3: #8c99ab;
+
+  --border: #24344a;
+  --grid: #1b2b40;
+  --zebra: color-mix(in srgb, var(--surface) 70%, var(--bg));
+  --hover: color-mix(in srgb, #ffffff 5%, var(--surface));
+  --on-navy: #eef2f7;
+  --on-navy-2: #b5c0cf;
+  --champ-navy: color-mix(in srgb, #ffffff 8%, var(--navy));
+
+  /* Série 2 : l'or clair garde 3:1 sur la surface sombre (validé CVD). */
+  --serie-2: #b8860b;
+
+  color-scheme: dark;
+}
+
+/* Impression : toujours sur le thème clair, fond blanc. */
+@media print {
+  :root,
+  :root.dark {
+    /* L'impression se fait toujours sur le thème clair. */
+    --bg: #ffffff;
+    --surface: #ffffff;
+    --ink: #0e1a28;
+    --ink-2: #4a5668;
+    --ink-3: #6b7686;
+    --border: #c9d1dc;
+    --grid: #e8ecf1;
+    --zebra: #f6f7f9;
+    --navy: #16314e;
+    --gold: #b8860b;
+    color-scheme: light;
+  }
+}

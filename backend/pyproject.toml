@@ -1,0 +1,19 @@
+[tool.black]
+line-length = 120
+target-version = ["py310"]
+extend-exclude = "migrations"
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+extend-exclude = ["migrations", ".venv"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "DJ"]
+ignore = ["B904", "B905", "UP007", "UP045", "DJ001", "DJ008", "E741"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["apps", "config", "etl", "tests"]
+
+[tool.coverage.run]
+omit = ["*/migrations/*", "tests/*"]

@@ -1,0 +1,96 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
+    font-size: 14px;
+    /* La barre d'onglets fixe ne doit jamais masquer l'élément qui a le focus. */
+    scroll-padding-top: 64px;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    background: var(--bg);
+    overflow-x: hidden;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+  select {
+    /* Mode sombre de Windows : fond et couleur explicites. */
+    background-color: var(--surface);
+    color: var(--ink);
+  }
+  [id] {
+    scroll-margin-top: 64px;
+  }
+}
+
+@layer components {
+  /* Petits libellés : capitales espacées. */
+  .etiquette {
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--ink-2);
+  }
+  .chiffres {
+    font-variant-numeric: tabular-nums;
+  }
+  .carte {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .carte-cliquable {
+    transition: box-shadow 150ms ease-out;
+  }
+  .carte-cliquable:hover {
+    box-shadow: 0 1px 3px color-mix(in srgb, var(--ink) 12%, transparent);
+  }
+  /* Jauges : seule animation, 200 ms au chargement. */
+  .jauge-remplie {
+    transform-origin: left center;
+    animation: jauge-entree 200ms ease-out;
+  }
+  /* Défilement horizontal des onglets avec fondu sur les bords. */
+  .defilement-fondu {
+    mask-image: linear-gradient(to right, transparent 0, #000 16px, #000 calc(100% - 16px), transparent 100%);
+  }
+}
+
+/* Mode présentation : navigation masquée, contenu agrandi pour la projection. */
+html.presentation .sans-presentation {
+  display: none !important;
+}
+html.presentation main {
+  zoom: 1.18;
+}
+
+@keyframes jauge-entree {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
