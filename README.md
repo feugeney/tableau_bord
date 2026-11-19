@@ -1,38 +1,46 @@
-# Système intégré de pilotage des finances publiques — MEFB (République de Guinée)
+# Tableau de bord des finances publiques — MEFB (République de Guinée)
 
 Tableau de bord de la Ministre de l'Économie, des Finances et du Budget : dépenses, trésorerie, recettes,
-dette, investissements, patrimoine, portefeuille de l'État et marchés publics, consolidés dans un seul entrepôt.
+dette, investissements, patrimoine, portefeuille de l'État et marchés publics, alimentés depuis une base centrale.
 
-Entrepôt de données financières de l'État et tableau de bord décisionnel : exécution budgétaire,
+Base centrale de données financières de l'État alimentée par ETL et tableau de bord décisionnel : exécution budgétaire,
 recettes, trésorerie, dette, investissements, patrimoine, portefeuille et paie. Chaque chiffre affiché
 indique sa source et sa date de situation.
 
 | Couche | Technologies |
 |---|---|
-| Backend | Python 3.12, Django 5, DRF, django-filter, drf-spectacular, Celery + Redis, python-oracledb, pandas/openpyxl |
-| Entrepôt | PostgreSQL 16, schémas `staging`, `ref`, `dw`, `mart` (vues matérialisées) |
+| Backend | Python 3.12, Django 5, DRF, python-oracledb, pandas/openpyxl |
+| Base centrale | PostgreSQL natif, schémas `staging`, `ref`, `dw`, `mart` |
 | Frontend | React 18, TypeScript, Vite, Tailwind (composants façon shadcn/ui), TanStack Query et Table, Recharts |
-| Infra | docker-compose : `db`, `redis`, `backend`, `worker`, `beat`, `frontend`, `nginx` (HTTPS) |
+| Poste local | PostgreSQL et Django ; interface compilée servie sur le même port |
 
-## Démarrage (Docker)
+## Démarrage local sous Windows
 
-```bash
-cp .env.example .env            # renseigner les secrets
-# Certificat TLS (remplacer par le certificat du ministère en production)
-openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-  -keyout nginx/certs/tdb.key -out nginx/certs/tdb.crt -subj "/CN=tdb.mefb.local"
-docker compose up -d --build
-docker compose exec backend python manage.py createsuperuser
-```
+Le projet fonctionne sans Docker, Redis, RabbitMQ ni Nginx. PostgreSQL conserve la base centrale ;
+Django sert l'API et l'interface compilée sur **http://127.0.0.1:8000**.
 
-Le service `backend` applique les migrations et lance `python manage.py initialiser` : sources,
-paramètres, référentiels de base (titres, procédures hors chaîne, libellés des sections) et règles
-d'alerte. La commande est idempotente.
+Prérequis pour une nouvelle installation : Python 3.12 ou plus récent, PostgreSQL natif et Node.js avec npm.
+Node sert à compiler l'interface ; aucun serveur Node n'est nécessaire pendant l'utilisation.
 
-Application : `https://<hôte>/` · API : `/api/v1/` · documentation OpenAPI : `/api/docs/` · admin : `/admin/`.
+1. Double-cliquer sur **Installer.cmd** une première fois : dépendances, compilation, base et migrations.
+2. Double-cliquer sur **Lancer.cmd** : PostgreSQL et l'application démarrent ; le navigateur s'ouvre.
+3. **Sauvegarder.cmd** produit une archive PostgreSQL vérifiée dans `sauvegardes/`.
+4. **Arreter.cmd** arrête l'application et son instance PostgreSQL sans effacer les données.
 
-> Sécurité : n'exposer l'application que sur le réseau du ministère ou via VPN (voir `nginx/nginx.conf`).
-> Tous les comptes de sources sont en lecture seule.
+Le fichier de configuration utilisé est **backend/.env**. Les secrets et connexions Oracle/SYSOP
+existants sont conservés. Les initialisations suivantes préservent les comptes et les données.
+Une première installation sans aucun compte crée `admin-local` et enregistre ses identifiants dans
+`backend/.local/identifiants-initiaux.txt`, ignoré par Git ; la double authentification s'enrôle à la connexion.
+
+La base est stockée dans `%LOCALAPPDATA%\tdb-ministre\pgdata`, hors du dossier synchronisé OneDrive.
+Une base déjà présente est réutilisée. Les imports ETL se lancent manuellement depuis l'administration.
+La programmation Celery reste une fonctionnalité séparée ; aucun worker ou broker n'est requis pour consulter
+les pages, importer manuellement ou exporter les rapports. Le dépôt de fichiers local reste disponible.
+
+L'application écoute uniquement sur le poste local. API : `/api/v1/` ; documentation : `/api/docs/` ;
+administration Django : `/admin/`. Journaux : `backend/.local/logs/`.
+
+Diagnostic : `powershell -ExecutionPolicy Bypass -File scripts/local.ps1 -Action diagnostic`.
 
 ## Développement local
 
@@ -40,7 +48,7 @@ Application : `https://<hôte>/` · API : `/api/v1/` · documentation OpenAPI : 
 # Backend (PostgreSQL local, Redis facultatif : REDIS_URL vide = cache mémoire)
 cd backend
 python -m venv .venv && .venv/Scripts/pip install -r requirements-dev.txt   # Windows ; bin/ sous Linux
-cp ../.env.example .env   # POSTGRES_HOST=localhost, REDIS_URL=
+# Conserver backend/.env cree par Installer.cmd.
 python manage.py migrate && python manage.py initialiser
 python manage.py runserver
 
@@ -50,6 +58,23 @@ cd frontend && npm install && npm run dev
 
 Qualité : `ruff check . && black --check . && pytest` (backend) ; `npm run lint && npm run typecheck && npm test` (frontend).
 La CI GitHub Actions (`.github/workflows/ci.yml`) exécute l'ensemble et exige 80 % de couverture.
+
+## Exports PDF
+
+Chaque rubrique métier propose **Exporter (PDF)** à côté d'Excel. Les documents reprennent
+la charte institutionnelle (armoiries, bleu marine, filet tricolore, indicateurs et tableaux),
+les filtres, les dates et les sources de chaque bloc. Les tableaux sont paginés avec en-têtes
+répétés ; les données d'illustration sont signalées et les données absentes restent indisponibles.
+
+Depuis **Synthèse**, **Rapport complet (PDF)** regroupe uniquement les rubriques que l'utilisateur
+peut exporter. Sans période imposée, chaque source conserve sa dernière situation propre ; une
+période explicitement sélectionnée n'est pas remplacée par une autre période disponible.
+L'Exploration propose également un PDF, en GNF, avec un maximum de 2 000 lignes annoncé dans
+le document ; Excel reste disponible pour les volumes supérieurs.
+
+API : `/api/v1/export/<page>.pdf`, `/api/v1/export/rapport.pdf`, `/api/v1/exploration/export.pdf`.
+Les mêmes permissions et exigences de double authentification s'appliquent ; les exports sont
+journalisés. Le rendu est produit localement par ReportLab, sans service tiers.
 
 ## Guide d'import — Chaîne Dépense (lot 1)
 
@@ -63,8 +88,8 @@ Ou depuis l'API (rôle `dnsi_admin`) : `POST /api/v1/sources/chaine_depense/impo
 
 - L'exercice et la date de situation sont lus dans le nom du fichier (« SC de AAAA-AAAA en date du JJ-MM-AAAA »),
   puis dans la colonne `Exercice`. Tous deux restent modifiables à l'import.
-- Onglets lus : Situation courante, Liste des engagements, Détails des opérations, Régie. Les autres onglets
-  (APAD, Délégations de crédits…) sont ignorés. Les colonnes supplémentaires de « Situation courante »
+- Onglets lus : Situation courante, Liste des engagements, Détails des opérations, Régie et APAD. Les autres onglets
+  (Délégations de crédits…) sont ignorés. Les colonnes supplémentaires de « Situation courante »
   (pilier Simandou, projet green, fonctionnelle…) sont conservées dans `attributs`.
 - **Contrôle bloquant** : le total engagé de « Situation courante » doit égaler celui de « Liste des engagements »
   à 1 GNF près par million (paramètre `concordance_tolerance_par_million`). Sinon rien n'est chargé.
@@ -88,13 +113,24 @@ sur les crédits actuels. Le paiement est « ajusté » par défaut : les procé
 
 ## Données d'illustration (sources non raccordées)
 
+L'onglet **TOFE** présente un scénario entièrement fictif du cadre guinéen : recettes et dons,
+charges, actifs non financiers, soldes et financement. Les hypothèses, conventions de signe et
+références officielles sont détaillées dans [l'étude TOFE](docs/etude-tofe-guinee.md).
+Il est indépendant des sources réelles et accessible aux comptes autorisés sur le domaine `tofe`.
+Pour ne générer que cette illustration :
+
+```powershell
+cd backend
+.\.venv\Scripts\python.exe manage.py seed_demo --sources tofe --exercice 2026 --date-situation 2026-11-13
+```
+
 ```bash
 python manage.py seed_demo                      # SAFIG, SYDONIA, SCIE, dette, FUGAS, SICOM, SYSOP
 python manage.py seed_demo --sources dette fugas --exercice 2026 --date-situation 2026-08-31
 python manage.py seed_demo --supprimer          # retour à « Source non raccordée »
 ```
 
-Même action depuis l'interface : **Administration › Entrepôt et illustration**.
+Même action depuis l'interface : **Administration › Données de test**.
 
 - Statut `demo` : bandeau « Données d'illustration » sur la page, pastille « · illustration » sur chaque chiffre.
 - Anonymisation : organismes, bureaux, centres et ministères fictifs (« Hôpital national A », « Bureau portuaire B »,
@@ -108,10 +144,14 @@ Interface : onglet **Administration** (icône roue dentée). API : `/api/v1/admi
 
 | Rubrique | Contenu |
 |---|---|
-| Sources et connecteurs | Type de connecteur, statut, planification (cron), configuration JSON, test de connexion, import de fichier avec aperçu |
-| Imports et chargements | Historique, contrôles de qualité de chaque chargement |
-| Mappings de colonnes | Correspondances colonne source → champ de l'entrepôt (connecteurs génériques) |
-| Entrepôt et illustration | Volumes des tables `ref`/`dw` et des vues `mart`, rafraîchissement, données d'illustration |
+| Vue d'ensemble | Cartographie des onglets, des sources et des destinations dans la base centrale |
+| État des sources | Statuts, dernières situations et tentatives d'alimentation |
+| Connexions aux sources | Type de connexion, configuration sans secret, test d'accès et import de fichier |
+| Flux ETL | SYSOP et Chaîne Dépense Oracle : exercice explicite, aperçu avec contrôles, activation, alimentation et programmation |
+| Exécutions et qualité | Historique, volumes et contrôles de chaque chargement |
+| Mappings de colonnes | Correspondances colonne source → champ de la base centrale (connecteurs génériques) |
+| Base centrale | Volumes des tables `ref`/`dw` et des vues `mart`, fichiers reçus et rafraîchissement |
+| Données de test | Génération et retrait des illustrations pour les sources non raccordées |
 | Utilisateurs et accès | Comptes, rôles, domaines visibles, réinitialisation de la double authentification |
 | Partage de données (API) | Jetons d'accès en lecture seule pour des systèmes tiers |
 | Règles d'alerte | Activation, sévérité, seuils, messages ; réévaluation |
@@ -121,6 +161,8 @@ Interface : onglet **Administration** (icône roue dentée). API : `/api/v1/admi
 Sécurité : aucun secret dans l'API ni en base. Les identifiants des connexions Oracle et PostgreSQL restent dans les
 variables d'environnement (`CHAINE_DEPENSE_ORACLE_*`, `SICOM_DATABASE_URL`, `SYSOP_DATABASE_URL`, `TELEMO_API_*`) ; l'interface
 indique seulement si elles sont renseignées. Les requêtes configurées sont limitées à la lecture (`SELECT`).
+
+Parcours et transition : [Administration de la base centrale et des flux ETL](docs/administration-base-centrale-etl.md).
 
 ### Partage de données par jeton
 
@@ -147,6 +189,8 @@ Mise en conformité avec les termes de référence de l'entrepôt : suivi dans `
 - **Exploration et BI** : page « Exploration des données » pour les analystes et les administrateurs (jeu de
   données, axes, mesures, filtres ; aucune requête SQL libre ; export Excel journalisé). Compte PostgreSQL en
   lecture seule pour un outil de BI : `python manage.py creer_acces_bi`.
+- **Projections de fin d'exercice** (`apps/core/projections.py`) : fourchette au 31 décembre pour les dépenses
+  et les recettes, alerte si l'engagement projeté reste sous `projection_engagement_min`.
 - **Livrables des termes de référence** : `docs/livrables/` (calendrier, rapport d'analyse et de conception,
   rapport d'étape, dossier de recette, guide d'exploitation, manuel utilisateur).
 - **Dimension temps** : `ref.dim_temps`, une ligne par jour (année, semestre, trimestre, mois, semaine ISO),
@@ -191,4 +235,4 @@ les consultations de page, les imports, les exports, les changements de paramèt
 | — | Module d'administration de l'entrepôt, partage de données par jeton | fait |
 | — | Refonte institutionnelle du frontend (charte, impression, présentation) | fait |
 | 8 | Exports Excel, documentation (dictionnaire des indicateurs) | fait |
-| — | Mise en conformité avec les termes de référence de l'entrepôt (`docs/plan-conformite.md`) | chantiers 1, 2, 3 et 8 faits |
+| — | Mise en conformité avec les termes de référence de l'entrepôt (`docs/plan-conformite.md`) | chantiers 1, 2, 3, 5 et 8 faits |

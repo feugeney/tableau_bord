@@ -1,28 +1,72 @@
-# Python
+# ---------------------------------------------------------------- Python
 __pycache__/
-*.pyc
+*.py[cod]
 .venv/
+venv/
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 .coverage
+.coverage.*
 htmlcov/
 backend/media/
 backend/staticfiles/
-# Node
+celerybeat-schedule*
+*.sqlite3
+
+# ---------------------------------------------------------------- Node / Vite
 node_modules/
 frontend/dist/
 coverage/
-# Secrets et données sensibles
+.vite/
+*.tsbuildinfo
+
+# ---------------------------------------------------------------- Secrets (le modèle .env.example est versionné)
 .env
+.env.*
+!.env.example
 backend/.env
+*.local
 nginx/certs/*.key
 nginx/certs/*.crt
-*.xlsx
-!backend/tests/**/*.xlsx
-# Outils et fichiers générés
-.ruff_cache/
-*.tsbuildinfo
-# Captures d'écran de vérification (peuvent montrer des chiffres réels)
-captures/
-# Dépôt SFTP et clés des partenaires (propres à chaque installation)
-backend/depot/
+nginx/certs/*.pem
+*.p12
+*.pfx
 sftp/cles/*.pub
+sftp/cles/id_*
+
+# ---------------------------------------------------------------- Données réelles et exports (jamais sur le dépôt)
+# Extractions, exports décideurs et sauvegardes contiennent des montants réels.
+*.xlsx
+*.xls
+*.csv
+!backend/tests/**/*.xlsx
+!backend/tests/**/*.csv
+*.dmp
+*.dump
+*.backup
+*.sql.gz
+sauvegardes/
+backend/depot/
+# Captures d'écran de vérification (peuvent montrer des chiffres réels) et fichiers produits
+captures/
+output/
+tmp/
+# Environnement local (base de développement, client Oracle, journaux)
+.local/
+backend/.local/
+instantclient*/
+*.log
+logs/
+
+# ---------------------------------------------------------------- Système et éditeurs
+# « nul » : fichier créé par une redirection Windows (> nul) exécutée dans Git Bash.
+nul
+Thumbs.db
+desktop.ini
+.DS_Store
+~$*
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.claude/settings.local.json

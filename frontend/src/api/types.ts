@@ -9,6 +9,10 @@ export interface Meta {
   statut_source: StatutSource;
   genere_le: string;
   paiement?: "ajuste" | "brut";
+  test_non_reconcilie?: boolean;
+  indicateurs_indisponibles?: string[];
+  origine?: string;
+  date_extraction?: string | null;
 }
 
 export interface Enveloppe<T> {
@@ -77,23 +81,121 @@ export interface Paiement {
 }
 
 export interface IndicateursDepense {
+  qualite?: {
+    engage_sup_credits: number;
+    liquide_sup_engage: number;
+    soldes_negatifs: { section: string; montant: number }[];
+  };
   credit_initial_lfi: number;
   credit_actuel: number;
   variation_lfi: number | null;
   credit_engage: number;
   taux_engagement: number | null;
   montant_liquide: number;
+  taux_liquidation: number | null;
+  taux_liquidation_sur_credits: number | null;
   montant_ordonnance: number;
   taux_ordonnancement: number | null;
+  taux_ordonnancement_sur_credits: number | null;
+  montant_vbp: number;
+  taux_vbp: number | null;
   montant_paye: number;
   taux_paiement: number | null;
-  credit_disponible: number;
+  taux_paiement_sur_credits: number | null;
+  credit_disponible: number | null;
   credits_non_engages: number;
   paiement: Paiement;
   hors_chaine: { ordonnance: number; paye: number };
   nb_lignes: number;
   nb_engagements: number;
   nb_lfi_absent: number;
+  nb_lignes_depassement: number | null;
+}
+
+export interface PilotageDepense {
+  disponibilite: {
+    credit_actuel: number | null;
+    credit_engage: number | null;
+    credit_disponible: number | null;
+    credit_reserve: number | null;
+    montant_bloque: number | null;
+    credits_non_engages: number | null;
+    disponible_reconstitue: number | null;
+    ecart_disponibilite: number | null;
+    part_immobilisee: number | null;
+  };
+  delais: {
+    libelle: string;
+    nb_engagements: number;
+    paires_valides: number;
+    couverture: number | null;
+    mediane_jours: number | null;
+    p90_jours: number | null;
+    delais_negatifs: number;
+    dates_futures: number;
+    sans_date_fin: number;
+  }[];
+  rapprochements: {
+    libelle: string;
+    reference: number | null;
+    detail_brut: number;
+    detail_comparable: number;
+    ecart: number | null;
+    cles_en_ecart: number | null;
+    ecart_absolu: number | null;
+    perimetre: string;
+  }[];
+  apad: {
+    renseigne: boolean;
+    nb_lignes: number | null;
+    nb_marches: number | null;
+    avance_demarrage: number | null;
+    reference: number | null;
+    ecart: number | null;
+    ministeres: { libelle: string; montant: number | null }[];
+    dossiers: {
+      ministere: string;
+      gestionnaire: string;
+      numero_apad: string;
+      numero_marche: string;
+      sous_section_id: string | null;
+      libelle_projet: string;
+      date_creation: string | null;
+      avance_demarrage: number | null;
+    }[];
+  };
+  regies: { nb_lignes: number | null; montant_regie: number | null };
+}
+
+export interface PilierSimandou {
+  pilier: string | null;
+  libelle: string;
+  nb_lignes: number;
+  nb_ministeres: number;
+  credit_actuel: number;
+  credit_engage: number;
+  montant_ordonnance: number;
+  montant_paye: number;
+  part: number | null;
+  taux_engagement: number | null;
+  taux_paiement: number | null;
+  empile: Nature["empile"];
+  principaux_ministeres: { code: string; libelle_court: string; credit_actuel: number }[];
+}
+
+export interface Simandou {
+  piliers: PilierSimandou[];
+  hors_pilier: PilierSimandou | null;
+  credit_simandou: number;
+  part_simandou: number | null;
+  taux_engagement_simandou: number | null;
+  green: {
+    nb_lignes: number;
+    credit_actuel: number;
+    credit_engage: number;
+    part: number | null;
+    taux_engagement: number | null;
+  };
 }
 
 export interface Phase {
@@ -116,7 +218,7 @@ export interface Nature {
   credit_engage: number;
   montant_ordonnance: number;
   montant_paye: number;
-  credit_disponible: number;
+  credit_disponible: number | null;
   taux_engagement: number | null;
   empile: { paye: number; ordonnance_non_paye: number; engage_non_ordonnance: number; disponible: number };
   reste_a_payer: number;
@@ -136,12 +238,14 @@ export interface SectionLigne {
   credit_actuel: number;
   credit_engage: number;
   taux_engagement: number | null;
+  montant_liquide: number;
   montant_ordonnance: number;
+  montant_vbp: number;
   montant_paye: number;
   paye_sur_ordonnance: number | null;
-  credit_disponible: number;
+  credit_disponible: number | null;
   reste_a_payer: number;
-  nb_lignes_depassement: number;
+  nb_lignes_depassement: number | null;
   statut: StatutMinistere;
 }
 
@@ -166,7 +270,7 @@ export interface SectionDetail {
     nature: string;
     credit_actuel: number;
     credit_engage: number;
-    credit_disponible: number;
+    credit_disponible: number | null;
   }[];
 }
 
@@ -174,11 +278,21 @@ export interface Mensuel {
   mois: {
     mois: string;
     montant_engage: number;
+    montant_engage_brut?: number;
     nb_engagements: number;
     periode_complementaire: boolean;
     decembre: boolean;
   }[];
   engage_periode_complementaire: number;
+  rapprochement?: {
+    perimetre: string;
+    brut: number;
+    comparable: number;
+    reference: number;
+    ecart_perimetre: number;
+    ecart_reference: number;
+    concordant: boolean;
+  };
 }
 
 export interface RestesAPayer {
@@ -256,13 +370,31 @@ export interface KpiSynthese {
   taux?: number | null;
   reference?: number | null;
   masque?: boolean;
+  raison_indisponibilite?: string;
   jours?: number | null;
   sous_seuil?: boolean;
   depasse?: boolean;
+  nombre?: number;
+  bande?: "tresorerie" | "recettes" | "execution" | "dette";
   meta: Meta;
 }
 
+/** Exercice précédent à la même date (engagement) et taux de clôture N−1 (autres phases). */
+export interface ComparaisonN1 {
+  disponible: boolean;
+  motif?: string;
+  exercice?: number;
+  date?: string;
+  taux_engagement?: number | null;
+  par_section?: Record<string, number | null>;
+  cloture?: Record<string, number | null>;
+  methode?: string;
+}
+
 export interface Synthese {
+  mode_synthese?: "decision" | "demonstration";
+  avertissements?: string[];
+  rapprochement_mensuel?: Mensuel["rapprochement"];
   indicateurs: KpiSynthese[];
   alertes: Alerte[];
   serie_mensuelle: {
@@ -273,6 +405,20 @@ export interface Synthese {
     objectif: number | null;
   }[];
   sources: Source[];
+  alertes_compte?: Partial<Record<"critique" | "serieux" | "vigilance", number>>;
+  execution?: {
+    indicateurs: IndicateursDepense;
+    comparaison_n1: ComparaisonN1;
+  } | null;
+  plan_engagement?: {
+    exercice: number;
+    periode: string;
+    etat: string;
+    plafond: number;
+    engage_periode: number | null;
+    taux: number | null;
+    nb_depassements: number;
+  } | null;
 }
 
 export interface Controle {

@@ -47,7 +47,7 @@ export default function Mappings() {
     <Carte
       id="mappings"
       titre="Mappings de colonnes"
-      sousTitre="Correspondance entre les colonnes d'une extraction (Excel, CSV, requête) et les champs de l'entrepôt : brancher une nouvelle extraction sans modifier le code."
+      sousTitre="Correspondance entre les colonnes d'une extraction (Excel, CSV, requête) et les champs de la base centrale pour les connecteurs génériques. Les profils métier spécialisés possèdent leurs propres règles."
     >
       <div className="mb-4 max-w-xs">
         <Champ libelle="Source">

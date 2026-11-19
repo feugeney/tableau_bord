@@ -1,0 +1,478 @@
+/* Écran d'authentification : colonne centrée sur fond clair (sombre selon le thème),
+   graphique décoratif animé en pied d'écran. Couleurs issues de la charte existante. */
+.auth-page {
+  position: relative;
+  display: flex;
+  min-height: 100svh;
+  flex-direction: column;
+  overflow: hidden;
+  isolation: isolate;
+  background: var(--bg);
+  color: var(--ink);
+}
+.auth-page > .filet-tricolore {
+  position: relative;
+  z-index: 2;
+}
+
+/* ---------------------------------------------------------------- graphique décoratif */
+.auth-graphique {
+  position: absolute;
+  inset: auto 0 0;
+  z-index: 0;
+  width: 100%;
+  height: min(38vh, 340px);
+  pointer-events: none;
+}
+.auth-graphique-grille {
+  stroke: var(--grid);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+.auth-graphique-barre {
+  fill: color-mix(in srgb, var(--navy) 7%, transparent);
+  transform-box: fill-box;
+  transform-origin: bottom;
+  animation: auth-barre 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+:root.dark .auth-graphique-barre {
+  fill: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+.auth-graphique-aire {
+  fill: color-mix(in srgb, var(--gold) 9%, transparent);
+  animation: auth-apparition 1.2s 1.4s ease-out both;
+}
+.auth-graphique-courbe {
+  fill: none;
+  stroke: var(--gold);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: auth-trace 2.4s 0.5s cubic-bezier(0.45, 0, 0.2, 1) forwards;
+}
+/* Dernier point de la courbe (x = 1440 → bord droit, y = 34/320 de la hauteur du graphique). */
+.auth-graphique-point {
+  position: absolute;
+  right: 0;
+  bottom: calc(min(38vh, 340px) * (1 - 34 / 320) - 6px);
+  z-index: 0;
+  width: 12px;
+  height: 12px;
+  margin-right: -6px;
+  border-radius: 50%;
+  background: var(--gold);
+  animation:
+    auth-apparition 0.4s 2.8s ease-out both,
+    auth-pulsation 2.4s 3.2s ease-out infinite;
+}
+
+/* ---------------------------------------------------------------- colonne centrale */
+.auth-contenu {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex: 1;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 36px 16px 24px;
+}
+.auth-entete-page {
+  position: relative;
+  z-index: 1;
+  padding: clamp(28px, 6vh, 56px) 16px 0;
+  text-align: center;
+  animation: auth-arrivee 0.6s ease-out both;
+}
+.auth-carte {
+  width: 100%;
+  max-width: 440px;
+  padding: 32px 32px 34px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow:
+    0 1px 2px color-mix(in srgb, var(--ink) 6%, transparent),
+    0 16px 40px color-mix(in srgb, var(--ink) 8%, transparent);
+  animation: auth-arrivee 0.6s ease-out both;
+}
+.auth-identite {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+.auth-sceau {
+  width: 88px;
+  height: 88px;
+}
+.auth-republique {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.auth-produit {
+  margin-top: 14px;
+  color: var(--navy);
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.3;
+  text-wrap: balance;
+}
+:root.dark .auth-produit {
+  color: var(--ink);
+}
+.auth-sous-titre {
+  margin-top: 4px;
+  color: var(--ink-2);
+  font-size: 15px;
+  line-height: 1.5;
+  text-wrap: balance;
+}
+.auth-pied {
+  position: relative;
+  z-index: 1;
+  padding: 0 16px 18px;
+  color: var(--ink-3);
+  font-size: 11px;
+  text-align: center;
+}
+
+/* ---------------------------------------------------------------- contenu de la carte */
+.auth-entete {
+  margin-bottom: 20px;
+}
+.auth-entete h2 {
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.3;
+  text-align: left;
+}
+.auth-entete > p {
+  margin-top: 6px;
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.auth-fields {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+}
+.auth-label {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+.auth-label-password {
+  margin-top: 18px;
+}
+.auth-input-wrap {
+  position: relative;
+}
+.auth-input {
+  width: 100%;
+  min-width: 0;
+  height: 46px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 15px;
+  line-height: normal;
+  transition:
+    border-color 0.15s ease-out,
+    box-shadow 0.15s ease-out;
+}
+.auth-input:hover {
+  border-color: var(--ink-3);
+}
+.auth-input:focus {
+  border-color: var(--navy);
+  outline: 0;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold) 22%, transparent);
+}
+:root.dark .auth-input:focus {
+  border-color: var(--gold);
+}
+.auth-input:disabled {
+  cursor: wait;
+  opacity: 0.75;
+}
+.auth-input[aria-invalid="true"] {
+  border-color: var(--etat-critique);
+}
+.auth-input-password {
+  padding-right: 52px;
+}
+.auth-password-toggle {
+  position: absolute;
+  inset: 3px 3px 3px auto;
+  display: flex;
+  width: 44px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  color: var(--ink-3);
+}
+.auth-password-toggle:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+.auth-input-otp {
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.32em;
+}
+.auth-submit {
+  display: flex;
+  width: 100%;
+  min-height: 46px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 22px;
+  padding: 11px 20px;
+  border-radius: 8px;
+  background: var(--navy);
+  color: var(--on-navy);
+  font-size: 15px;
+  font-weight: 600;
+  transition: filter 0.15s ease-out;
+}
+/* Thème sombre : le bleu marine se confond avec la carte ; bouton or, texte sombre. */
+:root.dark .auth-submit {
+  background: var(--gold);
+  color: var(--sur-etat);
+}
+.auth-submit:hover:not(:disabled) {
+  filter: brightness(1.15);
+}
+.auth-submit:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+.auth-erreur {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 11px 13px;
+  border: 1px solid color-mix(in srgb, var(--etat-critique) 35%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--etat-critique) 7%, var(--surface));
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.auth-erreur > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--etat-critique);
+}
+.auth-field-help {
+  margin: 0 0 10px;
+  color: var(--ink-2);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.auth-input-wrap + .auth-field-help {
+  margin: 8px 0 0;
+}
+
+/* ---------------------------------------------------------------- vérification en deux étapes */
+.auth-compte {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding: 11px 13px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+}
+.auth-compte-icon {
+  display: flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink-2);
+}
+.auth-compte > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+.auth-compte > div > span {
+  color: var(--ink-2);
+  font-size: 11px;
+}
+.auth-compte strong {
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 13px;
+}
+.auth-compte button {
+  min-height: 44px;
+  flex-shrink: 0;
+  margin-left: auto;
+  padding-inline: 3px;
+  color: var(--ink-2);
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.auth-enrolment-intro {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 13px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+}
+.auth-enrolment-intro > svg {
+  flex-shrink: 0;
+  color: var(--ink-2);
+}
+.auth-enrolment-intro > p {
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.auth-etape {
+  margin: 22px 0 8px;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+.auth-secret {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+}
+.auth-secret code {
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.auth-secret button {
+  display: flex;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink-2);
+}
+.auth-retour {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  color: var(--ink-2);
+  font-size: 12px;
+}
+
+/* ---------------------------------------------------------------- animations */
+.auth-spinner {
+  animation: auth-tour 1s linear infinite;
+}
+@keyframes auth-tour {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes auth-arrivee {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes auth-apparition {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes auth-trace {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes auth-barre {
+  from {
+    transform: scaleY(0);
+  }
+}
+@keyframes auth-pulsation {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--gold) 45%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 14px transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .auth-page *,
+  .auth-spinner {
+    animation: none !important;
+  }
+  .auth-graphique-courbe {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* ---------------------------------------------------------------- petits écrans */
+@media (max-width: 599px) {
+  .auth-contenu {
+    align-items: flex-start;
+    padding-top: 28px;
+  }
+  .auth-graphique {
+    height: 22vh;
+  }
+  .auth-graphique-point {
+    bottom: calc(22vh * (1 - 34 / 320) - 6px);
+  }
+  .auth-produit {
+    font-size: 22px;
+  }
+  .auth-sous-titre {
+    font-size: 13px;
+  }
+  .auth-contenu {
+    padding-top: 20px;
+  }
+  .auth-sceau {
+    width: 72px;
+    height: 72px;
+  }
+  .auth-carte {
+    padding: 26px 20px 24px;
+  }
+}

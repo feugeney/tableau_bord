@@ -27,7 +27,11 @@
   ],
   "regulations": ["00", "01", "02", "03", "04", "05", "10", "20", "30", "51", "54", "55", "80", "90", "xx"],
   "types_budget": [
-    {"code": "000", "libelle": ""},
-    {"code": "104", "libelle": ""}
+    {"code": "000", "libelle": "Budget général"},
+    {"code": "101", "libelle": "BAS FNDL/ANAFIC"},
+    {"code": "102", "libelle": "BAS FODECON/AFICON"},
+    {"code": "103", "libelle": "BAS RSU"},
+    {"code": "104", "libelle": "BAS FCE"},
+    {"code": "105", "libelle": "BAS FIM"}
   ]
 }

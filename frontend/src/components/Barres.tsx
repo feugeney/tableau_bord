@@ -25,7 +25,7 @@ export function HBarList({
   retard = "en retard",
 }: {
   lignes: LigneHBar[];
-  seuil?: number;
+  seuil?: number | null;
   /** Ce que représente le trait : « de l'objectif », « des crédits »… */
   reference?: string;
   /** Mention écrite sous le seuil (la couleur n'est jamais seule). */
@@ -36,7 +36,7 @@ export function HBarList({
     <ul className="flex flex-col gap-3">
       {lignes.map((l) => {
         const ratio = l.objectif ? l.valeur / l.objectif : null;
-        const enRetard = ratio !== null && ratio < seuil;
+        const enRetard = seuil !== null && ratio !== null && ratio < seuil;
         const contenu = (
           <>
             <span className="flex items-baseline justify-between gap-3 text-base">
@@ -102,7 +102,7 @@ export const SEGMENTS_EXECUTION = [
   { code: "paye", libelle: "Payé", couleur: "var(--phase-6)" },
   { code: "ordonnance_non_paye", libelle: "Ordonnancé non payé", couleur: "var(--phase-4)" },
   { code: "engage_non_ordonnance", libelle: "Engagé non ordonnancé", couleur: "var(--phase-2)" },
-  { code: "disponible", libelle: "Disponible", couleur: "var(--grid)" },
+  { code: "disponible", libelle: "Crédits non engagés", couleur: "var(--grid)" },
 ];
 
 /** Barre empilée (2 px d'espace entre segments) : payé / ordonnancé non payé / engagé non ordonnancé / disponible. */

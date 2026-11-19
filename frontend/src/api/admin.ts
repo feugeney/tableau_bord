@@ -138,7 +138,7 @@ export interface Entrepot {
     en_attente: { source: string; fichier: string; octets: number }[];
   };
   evenements_amqp: boolean;
-  version_cache: number;
+  version_cache: number | string;
   sources: { code: string; application: string; statut: StatutSource; chargements: number }[];
 }
 
@@ -176,8 +176,7 @@ export function useMutationAdmin<V, R = unknown>(fn: (v: V) => Promise<R>) {
   return useMutation({
     mutationFn: fn,
     onSuccess: () => {
-      client.invalidateQueries({ queryKey: ["admin"] });
-      client.invalidateQueries({ queryKey: ["sources"] });
+      client.invalidateQueries();
     },
   });
 }

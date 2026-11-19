@@ -98,6 +98,7 @@ class FaitEngagement(ImputationMixin, FaitBase):
     """
 
     numero = models.CharField(max_length=32, db_index=True)
+    attributs = models.JSONField(default=dict, blank=True)
     cle_imputation = models.CharField(max_length=40, db_index=True)
     type_procedure = models.ForeignKey(RefTypeProcedure, null=True, on_delete=models.PROTECT, related_name="+")
     etat_dossier = models.ForeignKey(RefEtatDossier, null=True, on_delete=models.PROTECT, related_name="+")
@@ -166,3 +167,86 @@ class FaitRegie(ImputationMixin, FaitBase):
 
     class Meta:
         db_table = dw_table("fait_regie")
+
+
+class FaitAPAD(ImputationMixin, FaitBase):
+    """Avance enregistrée par le producteur, sans présumer son paiement ou son apurement."""
+
+    gestionnaire = models.CharField(max_length=16, blank=True)
+    numero_apad = models.CharField(max_length=32)
+    numero_marche = models.CharField(max_length=64, blank=True)
+    libelle_projet = models.TextField(blank=True)
+    nature_flux = models.CharField(max_length=16, blank=True)
+    avance_demarrage = montant()
+    montant_absent = models.BooleanField(default=False)
+    date_creation = models.DateField(null=True)
+    ligne_source = models.PositiveIntegerField()
+
+    class Meta:
+        db_table = dw_table("fait_apad")
+        constraints = [models.UniqueConstraint(fields=["chargement", "ligne_source"], name="apad_ligne_source_unique")]
+
+
+class PlanEngagementPeriode(FaitBase):
+    """En-tête d'un trimestre du plan d'engagement (GDEP.TD_PLAN_ENG_PARAMETRE).
+
+    Le plan régule les engagements selon les possibilités de trésorerie (décret
+    D/2013/015/PRG/SGG, art. 19) ; il est arrêté chaque trimestre par le ministre du Budget.
+    """
+
+    periode = models.CharField(max_length=2)
+    etat_code = models.CharField(max_length=3, blank=True)
+    etat_libelle = models.CharField(max_length=80, blank=True)
+    montant_mobilisable = montant(null=True)
+    montant_imprevu = montant(null=True)
+    montant_obligatoire_titre2 = montant(null=True)
+    montant_repartissable = montant(null=True)
+    reference_arrete = models.CharField(max_length=100, blank=True)
+    date_validation = models.DateField(null=True)
+    date_ouverture = models.DateField(null=True)
+    periode_courante = models.BooleanField(default=False)
+    periode_execution = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = dw_table("fait_plan_engagement_periode")
+        constraints = [
+            models.UniqueConstraint(fields=["chargement", "periode"], name="plan_eng_periode_unique"),
+        ]
+
+
+class FaitPlanEngagement(FaitBase):
+    """Plafond trimestriel par section et titre (GDEP.TD_PLAN_ENG).
+
+    `engage_ouverture` est l'engagé visé CF cumulé à l'ouverture du trimestre ; `plafond`
+    est le montant répartissable que les régulations du trimestre ne peuvent dépasser.
+    """
+
+    periode = models.CharField(max_length=2)
+    section_code = models.CharField(max_length=4)
+    section_libelle = models.CharField(max_length=255, blank=True)
+    titre = models.CharField(max_length=4)
+    credit = montant()
+    engage_ouverture = montant()
+    plafond = montant()
+    montant_propose = montant()
+    montant_arbitrage = montant()
+
+    class Meta:
+        db_table = dw_table("fait_plan_engagement")
+        indexes = [models.Index(fields=["chargement", "periode", "section_code"])]
+
+
+class FaitPlanEngagementAjustement(FaitBase):
+    """Virement de plafond entre sections ou titres (GDEP.TD_PLAN_ENG_AJUSTEMENT)."""
+
+    periode = models.CharField(max_length=2)
+    section_source = models.CharField(max_length=4)
+    titre_source = models.CharField(max_length=4)
+    section_destination = models.CharField(max_length=4)
+    titre_destination = models.CharField(max_length=4)
+    montant = montant()
+    observation = models.TextField(blank=True)
+    date_ajustement = models.DateField(null=True)
+
+    class Meta:
+        db_table = dw_table("fait_plan_engagement_ajustement")

@@ -70,6 +70,7 @@ class BaseConnector(ABC):
         self.donnees: dict[str, pd.DataFrame] = {}
         self.rapport = RapportValidation()
         self.comptes: dict[str, dict[str, int]] = {}
+        self.informations_chargement: dict = {}
 
     @property
     def nom_fichier(self) -> str:
@@ -186,6 +187,7 @@ class BaseConnector(ABC):
         }
         if getattr(self, "origine", None):
             chargement.detail["origine"] = self.origine  # « depot » : fichier relevé dans le dépôt SFTP
+        chargement.detail.update(getattr(self, "informations_chargement", {}))
         self._archiver(chargement)
         chargement.fin = timezone.now()
         chargement.duree_secondes = round(time.monotonic() - debut, 2)

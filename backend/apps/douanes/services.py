@@ -5,7 +5,7 @@ from __future__ import annotations
 from django.db.models import Sum
 
 from apps.core import regles
-from apps.core.domaines import chargements_actifs, somme, ventiler
+from apps.core.domaines import chargements_actifs, projection_recettes, somme, ventiler
 from apps.core.filtres import Filtres
 
 from .models import FaitDeclaration, FaitExoneration, FaitRecetteDouane
@@ -36,6 +36,10 @@ def page(f: Filtres) -> dict:
     for ligne in par_nature:
         ligne["taux"] = regles.taux(ligne["recouvre"], ligne["objectif"])
     total_exo = somme(exo, "montant")["montant"]
+    mensuel = [
+        {"mois": ligne["libelle"], "objectif": ligne["objectif"], "recouvre": ligne["recouvre"]}
+        for ligne in ventiler(rec, "mois", "objectif", "recouvre", ordre="mois")
+    ]
     return {
         "indicateurs": {
             "recouvre": tot["recouvre"],
@@ -47,10 +51,8 @@ def page(f: Filtres) -> dict:
             "delai_moyen_jours": round(jours / nb_decl, 1) if nb_decl else None,
         },
         "par_nature": par_nature,
-        "mensuel": [
-            {"mois": ligne["libelle"], "objectif": ligne["objectif"], "recouvre": ligne["recouvre"]}
-            for ligne in ventiler(rec, "mois", "objectif", "recouvre", ordre="mois")
-        ],
+        "mensuel": mensuel,
+        "projection": projection_recettes(mensuel, f),
         "par_bureau": ventiler(rec, "bureau__libelle", "objectif", "recouvre"),
         "circuits": circuits,
         "exonerations_par_regime": ventiler(exo, "regime", "montant"),

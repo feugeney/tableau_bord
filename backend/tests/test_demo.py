@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 
 import pytest
 
@@ -94,7 +95,9 @@ def test_page_recettes_fiscales_coherente(illustre):
 
 def test_synthese_avec_illustration(illustre):
     c = client_pour(utilisateur("cab", "ministre_cabinet"))
-    kpis = {k["code"]: k for k in c.get("/api/v1/synthese/").data["data"]["indicateurs"]}
+    kpis = {
+        k["code"]: k for k in c.get("/api/v1/synthese/", {"mode_synthese": "demonstration"}).data["data"]["indicateurs"]
+    }
     assert kpis["recettes"]["meta"]["statut_source"] == "demo" and kpis["recettes"]["valeur"] > 0
     assert kpis["dette"]["reference"] == 0.7
     assert kpis["tresorerie"]["valeur"] > 0
@@ -169,3 +172,27 @@ def test_marches_publics_entente_directe(illustre):
     assert Alerte.objects.filter(regle__code="marches_coherence").exists()
     if i["entente_directe_excessive"]:
         assert Alerte.objects.filter(regle__code="marches_entente_directe").exists()
+
+
+def test_chaine_depense_sur_demande(db):
+    """Jamais chargée par défaut ; sur demande, lignes et engagements fictifs cohérents entre eux."""
+    from django.db.models import Sum
+
+    from apps.depense.models import FaitEngagement, FaitSituationLigne
+
+    assert "chaine_depense" not in demo.generer(**SITUATION, sources=["dette"])
+    assert demo.generer(**SITUATION, sources=["chaine_depense"]) == {"chaine_depense": "chargée"}
+    assert not FaitSituationLigne.objects.exclude(section__fictif=True).exists()
+    engage = FaitEngagement.objects.aggregate(s=Sum("montant_engage"))["s"]
+    assert FaitSituationLigne.objects.aggregate(s=Sum("credit_engage"))["s"] == pytest.approx(
+        engage, rel=Decimal("0.000001")
+    )
+    c = client_pour(utilisateur("cab", "ministre_cabinet"))
+    r = c.get("/api/v1/depense/indicateurs/", {"exercice": 2025, "date_situation": "2025-09-15"})
+    assert r.status_code == 200
+    assert r.data["meta"]["statut_source"] == "demo"
+    assert 0 < r.data["data"]["taux_engagement"] < 1
+    s = c.get("/api/v1/depense/simandou/", {"exercice": 2025, "date_situation": "2025-09-15"}).data["data"]
+    assert len(s["piliers"]) == 5
+    assert s["hors_pilier"] is not None  # dette et lignes sans pilier
+    assert s["green"]["nb_lignes"] > 0

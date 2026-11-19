@@ -44,5 +44,9 @@ def connecteur_pour(
     if source.connecteur == TypeConnecteur.API:
         return ApiConnector(source.code, conf, **commun)
     if source.connecteur == TypeConnecteur.POSTGRES:
+        if source.code == "sysop" and conf.get("profil") == "sysop_portefeuille":
+            from .sysop import SysopPortefeuilleConnector
+
+            return SysopPortefeuilleConnector(**commun)
         return PostgresConnector(source.code, conf["table_cible"], conf["requete"], **commun)
     raise ErreurChargement(f"Aucun chargement automatique pour {source.code} ({source.connecteur}).")

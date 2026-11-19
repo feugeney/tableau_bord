@@ -9,6 +9,29 @@ from apps.core.models import Source, TypeConnecteur
 logger = logging.getLogger(__name__)
 
 
+@shared_task(name="etl.executer_flux")
+def executer_flux_task(flux_id):
+    """Exécution programmée : un échec, même refusé avant l'extraction, lève une alerte."""
+    from rest_framework.exceptions import ValidationError
+
+    from apps.core.etl_admin import executer_flux, suivre_execution_planifiee
+    from apps.core.models import FluxETL
+
+    flux = FluxETL.objects.select_related("source").get(pk=flux_id)
+    try:
+        ch = executer_flux(flux, declenchement="planification")
+    except ValidationError as exc:
+        details = exc.detail if isinstance(exc.detail, list) else [exc.detail]
+        message = " ".join(str(d) for d in details)
+        suivre_execution_planifiee(flux, message=message)
+        return {"statut": "refuse", "message": message}
+    except Exception as exc:
+        suivre_execution_planifiee(flux, message=f"erreur inattendue ({type(exc).__name__})")
+        raise
+    suivre_execution_planifiee(flux, ch)
+    return {"chargement": ch.pk, "statut": ch.statut}
+
+
 @shared_task(name="etl.charger_source")
 def charger_source(
     code_source: str,

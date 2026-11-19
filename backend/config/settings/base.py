@@ -89,12 +89,20 @@ DATABASES = {
     }
 }
 
+# Interdiction d'interroger la production Oracle en semaine aux heures ouvrées (7 h 30 – 18 h 30).
+# Active par défaut (production) ; désactivée en développement (settings/dev.py).
+ORACLE_RESTRICTION_HEURES_OUVREES = env.bool("ORACLE_RESTRICTION_HEURES_OUVREES", default=True)
+
 # Sources externes en lecture seule (comptes dédiés, jamais la production aux heures ouvrées).
 SOURCES_EXTERNES = {
     "chaine_depense_oracle": {
         "dsn": env("CHAINE_DEPENSE_ORACLE_DSN", default=""),
         "user": env("CHAINE_DEPENSE_ORACLE_USER", default=""),
         "password": env("CHAINE_DEPENSE_ORACLE_PASSWORD", default=""),
+        "client_lib_dir": env("CHAINE_DEPENSE_ORACLE_CLIENT_LIB_DIR", default=""),
+        "thick": env.bool("CHAINE_DEPENSE_ORACLE_THICK", default=False),
+        "connect_timeout": env.int("CHAINE_DEPENSE_ORACLE_CONNECT_TIMEOUT", default=10),
+        "call_timeout_ms": env.int("CHAINE_DEPENSE_ORACLE_CALL_TIMEOUT_MS", default=30000),
     },
     "sicom": {"url": env("SICOM_DATABASE_URL", default="")},
     "sysop": {"url": env("SYSOP_DATABASE_URL", default="")},
@@ -147,7 +155,7 @@ SIMPLE_JWT = {
 }
 
 SPECTACULAR_SETTINGS = {
-    "TITLE": "API — Système intégré de pilotage des finances publiques (MEFB)",
+    "TITLE": "API — Tableau de bord des finances publiques (MEFB)",
     "DESCRIPTION": "Entrepôt de données financières de l'État — République de Guinée.",
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,

@@ -25,7 +25,7 @@ Les deux actions qui font le plus avancer le projet ne dépendent pas du prestat
 | 3 | Profil analyste, exploration, accès BI | Fait | |
 | 8 | Livrables | Fait (première version) | Six documents dans `docs/livrables/` |
 | 4 | Raccordement des sources réelles | **Bloqué** | En attente des accès et des extractions |
-| 5 | Analyses prédictives | À faire | Peut démarrer sur la Chaîne Dépense |
+| 5 | Analyses prédictives | Fait | Projections de fin d'exercice : dépenses (réel), recettes (illustration) |
 | 6 | Données ouvertes | **En attente d'une décision** | Quelles données sont publiables |
 | 7 | Second site, sauvegarde, reprise | **En attente d'une décision** | Choix de l'hébergeur |
 
@@ -43,12 +43,18 @@ Les deux actions qui font le plus avancer le projet ne dépendent pas du prestat
 
 | Vérification | Résultat |
 |---|---|
-| Tests automatiques du serveur | 235, tous réussis |
+| Tests automatiques du serveur | 253, tous réussis |
 | Tests automatiques de l'interface | 17, tous réussis |
 | Navigation au clavier | 12 vérifications réussies |
 | Couverture de code | 99 % sur les règles de gestion, 93 % sur les connecteurs |
 | Vérification à l'écran | Pages, administration et exploration contrôlées sur l'application en marche |
 | Installation sur serveur | **Non faite** |
+
+### Premier résultat des projections
+
+Sur l'extraction du 16 août 2026, 13 % des crédits sont engagés. Au rythme constaté, **26 à 29 % le seraient
+au 31 décembre**. Cette fourchette est à prendre avec prudence : l'exécution n'a commencé qu'en avril, et la
+méthode, appliquée fin juin, aurait sous-estimé de 9 % le montant constaté mi-août.
 
 ## 5. Risques
 
@@ -74,4 +80,3 @@ Les deux actions qui font le plus avancer le projet ne dépendent pas du prestat
 
 - Installation sur le serveur de recette et première séance de recette (parties A, B, F du dossier).
 - Raccordement de la deuxième source réelle, dès réception d'un accès.
-- Chantier 5 : projections de fin d'exercice sur les données de la Chaîne Dépense.

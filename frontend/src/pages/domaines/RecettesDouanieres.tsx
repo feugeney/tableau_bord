@@ -4,10 +4,11 @@ import { DataTable } from "@/components/DataTable";
 import { GroupedBarChart } from "@/components/GroupedBarChart";
 import { BandeauKpi, KpiCard } from "@/components/Indicateurs";
 import { Montant, Pourcentage } from "@/components/Montant";
+import { BlocProjection, type Projection } from "@/components/Projection";
 import { Carte } from "@/components/ui/primitives";
 import { nombre, pct } from "@/lib/format";
 
-import { EtatPage, TitrePage, Zone } from "../commun";
+import { EtatPage, Zone } from "../commun";
 import { ContenuPrevu, serieMois, type LigneObjectif } from "./commun";
 
 interface Donnees {
@@ -22,6 +23,8 @@ interface Donnees {
   };
   par_nature: LigneObjectif[];
   mensuel: { mois: number; objectif: number; recouvre: number }[];
+  /** Absente d'une réponse mise en cache avant l'ajout des projections. */
+  projection?: Projection;
   par_bureau: LigneObjectif[];
   circuits: { circuit: "vert" | "jaune" | "rouge"; nombre: number; part: number | null }[];
   exonerations_par_regime: { libelle: string; montant: number }[];
@@ -39,11 +42,6 @@ export default function RecettesDouanieres() {
   const r = useDonnees<Donnees>("/douanes/");
   return (
     <>
-      <TitrePage
-        exporter="recettes-douanieres"
-        titre="Recettes douanières"
-        sousTitre="SYDONIA · Direction générale des douanes"
-      />
       <EtatPage requete={r} vide={<ContenuPrevu cle="recettes-douanieres" />} indicateurs={4}>
         {(d, env) => {
           const i = d.indicateurs;
@@ -123,6 +121,23 @@ export default function RecettesDouanieres() {
                   </Carte>
                 </div>
               </Zone>
+
+              {d.projection && (
+                <Zone titre="Projection">
+                  <Carte
+                    id="projection"
+                    titre="Projection de fin d'exercice"
+                    sousTitre="Recouvrement cumulé constaté, puis prolongé jusqu'au 31 décembre"
+                  >
+                    <BlocProjection
+                      p={d.projection}
+                      grandeur="recouvrés"
+                      libelleCible="Objectif annuel"
+                      libelleRealise="Recouvré (cumul)"
+                    />
+                  </Carte>
+                </Zone>
+              )}
 
               <Zone titre="Détail">
                 <div className="grid gap-4 lg:grid-cols-2">

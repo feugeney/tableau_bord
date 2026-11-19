@@ -22,7 +22,7 @@ import { usePresentation } from "@/hooks/usePresentation";
 import { useSituation } from "@/hooks/useSituation";
 import { dateFr } from "@/lib/format";
 import { PLATEFORME } from "@/lib/identite";
-import { ONGLETS, ongletCourant } from "@/lib/onglets";
+import { ONGLETS, ongletAutorise, ongletCourant } from "@/lib/onglets";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/theme/ThemeProvider";
 
@@ -55,6 +55,9 @@ function Periode() {
           disabled={!exercices.length}
         >
           {!exercices.length && <option value="">—</option>}
+          {exercice != null && !exercices.some((e) => e.exercice === exercice) && (
+            <option value={exercice}>{exercice} · non disponible</option>
+          )}
           {exercices.map((e) => (
             <option key={e.exercice} value={e.exercice}>
               {e.exercice}
@@ -73,6 +76,9 @@ function Periode() {
           disabled={!dates.length}
         >
           {!dates.length && <option value="">—</option>}
+          {dateSituation && !dates.includes(dateSituation) && (
+            <option value={dateSituation}>{dateFr(dateSituation)} · non disponible</option>
+          )}
           {dates.map((d) => (
             <option key={d} value={d}>
               {dateFr(d)}
@@ -221,7 +227,7 @@ function Navigation({ onSommaire }: { onSommaire: () => void }) {
   const { utilisateur } = useAuth();
   const { global } = useFiltres();
   const { actif, basculer } = usePresentation();
-  const onglets = ONGLETS.filter((o) => utilisateur?.domaines.includes(o.domaine));
+  const onglets = ONGLETS.filter((o) => ongletAutorise(o, utilisateur?.domaines));
   const { pathname } = useLocation();
   const liste = useRef<HTMLUListElement>(null);
   useEffect(() => {
@@ -379,7 +385,7 @@ function PiedDePage() {
     <footer className="sans-impression sans-presentation mt-8">
       <FiletTricolore fin />
       <div className="mx-auto flex max-w-page flex-wrap items-baseline justify-between gap-x-6 gap-y-1 px-4 py-4 text-sm text-ink-2 md:px-6">
-        <p>{PLATEFORME.ministere} · Direction nationale des systèmes d'information</p>
+        <p>{PLATEFORME.ministere} · Service de Modernisation des systèmes d'information</p>
         {CREDIT_ARMOIRIES && <p className="text-xs text-ink-3">{CREDIT_ARMOIRIES}</p>}
       </div>
     </footer>

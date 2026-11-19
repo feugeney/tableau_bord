@@ -25,6 +25,7 @@ interface Donnees {
     part_budget: number | null;
     montant_ordonnance: number;
     taux_ordonnancement: number | null;
+    taux_ordonnancement_sur_credits: number | null;
   }>;
   par_ministere: Bloc<
     { libelle: string; credit_actuel: number; credit_engage: number; montant_ordonnance: number }[]
@@ -70,11 +71,11 @@ export default function MasseSalariale() {
                     valeur={<Montant gnf={d.credits.donnees?.montant_ordonnance} />}
                     contexte={
                       <>
-                        <Pourcentage ratio={d.credits.donnees?.taux_ordonnancement} /> des crédits de
-                        personnel
+                        <Pourcentage ratio={d.credits.donnees?.taux_ordonnancement_sur_credits} /> des crédits
+                        de personnel
                       </>
                     }
-                    jauge={{ valeur: d.credits.donnees?.taux_ordonnancement }}
+                    jauge={{ valeur: d.credits.donnees?.taux_ordonnancement_sur_credits }}
                     meta={d.credits.meta}
                   />
                   <KpiCard

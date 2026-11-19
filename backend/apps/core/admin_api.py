@@ -110,6 +110,10 @@ class SourceAdminSerializer(serializers.ModelSerializer):
         )
 
     def validate_planification_cron(self, v):
+        if self.instance and self.instance.code in ("sysop", "chaine_depense") and v.strip():
+            raise ValidationError(
+                "La programmation de cette source se définit dans Flux ETL, avec un exercice explicite."
+            )
         if v and not CRON.match(v.strip()):
             raise ValidationError("Expression cron à 5 champs attendue, ex. « 0 2 * * * ».")
         return v.strip()
@@ -189,16 +193,15 @@ def tester_connexion(s: Source) -> tuple[bool, str]:
                 cnx.execute("SELECT 1")
             return True, "Connexion PostgreSQL établie (lecture seule)."
         if s.connecteur == TypeConnecteur.ORACLE_CHAINE_DEPENSE:
-            import oracledb
+            from etl.connecteurs.oracle import connexion_lecture_seule
 
             conf = settings.SOURCES_EXTERNES["chaine_depense_oracle"]
             if not conf["dsn"]:
                 return False, "Variable CHAINE_DEPENSE_ORACLE_DSN non renseignée."
-            with oracledb.connect(
-                user=conf["user"], password=conf["password"], dsn=conf["dsn"], tcp_connect_timeout=5
-            ) as cnx:
-                cnx.cursor().execute("SELECT 1 FROM dual")
-            return True, "Connexion Oracle établie."
+            with connexion_lecture_seule() as cnx:
+                with cnx.cursor() as cursor:
+                    cursor.execute("SELECT 1 FROM dual")
+            return True, "Connexion Oracle établie (lecture seule)."
         if s.connecteur == TypeConnecteur.API:
             import urllib.request
 
@@ -312,7 +315,9 @@ class TablesCiblesView(APIView):
                             else (
                                 "date"
                                 if isinstance(f, models.DateField)
-                                else "booleen" if isinstance(f, models.BooleanField) else "texte"
+                                else "booleen"
+                                if isinstance(f, models.BooleanField)
+                                else "texte"
                             )
                         )
                     )

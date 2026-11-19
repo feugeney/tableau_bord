@@ -110,6 +110,36 @@ class PaiementsRetard(Evaluateur):
         ]
 
 
+class ProjectionEngagement(Evaluateur):
+    """Au rythme constaté, l'engagement de fin d'exercice resterait loin des crédits."""
+
+    source_code = "chaine_depense"
+
+    def evaluer(self):
+        from apps.depense.services import projection
+
+        f = self.filtres()
+        if not f:
+            return []
+        p = projection(f)
+        e = p["engagement"]
+        if not p["sous_le_seuil"]:
+            return []
+        return [
+            Constat(
+                {
+                    "bas": pct(e["taux_bas"]),
+                    "haut": pct(e["taux_haut"]),
+                    "realise": pct(e["taux_realise"]),
+                    "seuil": pct(p["seuil"]),
+                    "non_engages": mds(e["cible"] - e["haut"]),
+                    "nb_ministeres": p["nb_ministeres_sous_le_seuil"],
+                },
+                valeur=pct(e["taux_haut"]),
+            )
+        ]
+
+
 class InvestissementFaible(Evaluateur):
     source_code = "chaine_depense"
 
@@ -366,6 +396,18 @@ REGLES = [
         "Crédits ≥ 20 Mds engagés à moins de 50 % : {ministeres}. Crédits non engagés : {montant}.",
         "Convoquer les DAF concernés et arrêter un plan d'engagement.",
         "/depenses",
+    ),
+    (
+        "depense_projection_faible",
+        Domaine.DEPENSE,
+        Severite.VIGILANCE,
+        "ProjectionEngagement",
+        {},
+        "Engagement projeté entre {bas} et {haut} des crédits au 31 décembre",
+        "Engagé à ce jour : {realise}. Au rythme constaté, au moins {non_engages} de crédits resteraient non "
+        "engagés en fin d'exercice (seuil : {seuil}) ; {nb_ministeres} ministère(s) sont sous le seuil.",
+        "Examiner avec la DGB les ministères les plus éloignés et les crédits à redéployer.",
+        "/depenses#projection",
     ),
     (
         "investissement_faible",

@@ -14,10 +14,33 @@ def test_taux_denominateur_nul():
     assert regles.taux(1, 4) == Decimal("0.25")
 
 
-def test_taux_calcules_sur_credits_actuels():
+def test_taux_de_la_chaine_rapportes_a_l_etape_precedente():
+    # Décision du 18/11/2026 : crédits → engagé → liquidé → ordonnancé → VBP / payé.
     assert regles.taux_engagement(71, 100) == Decimal("0.71")
+    assert regles.taux_liquidation(90, 100) == Decimal("0.9")
     assert regles.taux_ordonnancement(50, 100) == Decimal("0.5")
+    assert regles.taux_vbp(75, 100) == Decimal("0.75")
     assert regles.taux_paiement(25, 100) == Decimal("0.25")
+
+
+def test_exemple_section_31_sur_l_ordonnance():
+    ordonnance = Decimal("178162952352")
+    vbp = Decimal("97406108382")
+    paye = Decimal("65312383218")
+    assert [round(r * 100) for r in (regles.taux_vbp(vbp, ordonnance), regles.taux_paiement(paye, ordonnance))] == [
+        55,
+        37,
+    ]
+
+
+@pytest.mark.parametrize(
+    "fonction", [regles.taux_liquidation, regles.taux_ordonnancement, regles.taux_paiement, regles.taux_vbp]
+)
+def test_taux_execution_sans_denominateur(fonction):
+    assert fonction(10, 0) is None
+    assert fonction(10, None) is None
+    assert fonction(0, 100) == 0
+    assert fonction(150, 100) == Decimal("1.5")
 
 
 def test_paiement_ajuste_exclut_hors_chaine():

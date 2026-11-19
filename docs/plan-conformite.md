@@ -16,7 +16,7 @@ l'ordre des chantiers qui le comblent. Il est mis à jour à la fin de chaque ch
 | 2 | Échanges et collecte automatisée : dépôt de fichiers par SFTP, messagerie AMQP (RabbitMQ), schémas JSON des flux, XML, TLS 1.3 | 4, 6.2, 6.4.1, 6.4.2 | **fait** (services SFTP et RabbitMQ à démarrer sur le serveur de recette) |
 | 3 | Profils et outils d'analyse : profil analyste, exploration libre des données, accès pour un outil de BI | 3, 4 | **fait** |
 | 4 | Raccordement des sources réelles, une direction à la fois (dépend des accès fournis) | 3, 5, 7.2 | à faire |
-| 5 | Analyses prédictives : projections de fin d'exercice | 4, 6.1 | à faire |
+| 5 | Analyses prédictives : projections de fin d'exercice (dépenses, recettes fiscales et douanières) | 4, 6.1 | **fait** |
 | 6 | Données ouvertes : diffusion au public et aux partenaires | 4 | décision |
 | 7 | Deux sites (local et cloud), sauvegarde et reprise | 6.1 | décision |
 | 8 | Livrables : calendrier, rapport d'analyse et de conception, rapport d'étape, dossier de recette, guide d'exploitation, manuel utilisateur | 7.1 | **fait** (première version, `livrables/`) |
@@ -35,7 +35,7 @@ l'ordre des chantiers qui le comblent. Il est mis à jour à la fin de chaque ch
 | Mise à jour périodique selon la criticité | fait | Planification par source (Administration › Sources et connecteurs). |
 | Accès sécurisé par profil (administrateurs, analystes, décideurs) | fait | Profils cabinet, directeur, analyste, administrateur, lecteur ; double authentification pour le cabinet, les administrateurs et les analystes. |
 | Interopérabilité par standards ouverts | fait | API REST documentée, partage par jeton, dépôt SFTP, événements AMQP. Voir `echanges-partenaires.md`. |
-| Reporting, BI ou IA (analyses prédictives) | partiel | Tableaux de bord faits ; prédictif : chantier 5. |
+| Reporting, BI ou IA (analyses prédictives) | fait | Tableaux de bord ; projections de fin d'exercice par prolongement du rythme, avec fourchette et vérification rétrospective. Pas de modèle d'apprentissage : un seul exercice est chargé. |
 | Diffusion automatique, données ouvertes | décision | Chantier 6. |
 
 ### Architecture et flux (TdR 6.1 et 6.2)

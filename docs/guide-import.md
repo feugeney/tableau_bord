@@ -64,6 +64,38 @@ Les coordonnées bancaires, l'adresse et le RCCM des titulaires ne sont pas repr
 
 ## 4. Raccorder SICOM ou SYSOP (PostgreSQL)
 
+### Diagnostic SYSOP sans import
+
+Renseigner `SYSOP_DATABASE_URL` dans `backend/.env` pour une exécution locale
+(ou dans l'environnement du service backend pour Docker), avec un compte dédié en lecture seule :
+
+```dotenv
+SYSOP_DATABASE_URL=postgresql://lecteur:MOT_DE_PASSE_ENCODE@hote:5432/sysop
+```
+
+Encoder les caractères réservés du nom d'utilisateur et du mot de passe dans l'URL
+(par exemple `@` devient `%40`). Ajouter les paramètres SSL fournis par l'administrateur,
+par exemple `?sslmode=verify-full&sslrootcert=chemin_du_certificat` si requis.
+Ne pas partager cette URL ni la versionner.
+
+Depuis le dossier `backend`, sous Windows :
+
+```powershell
+.\.venv\Scripts\python.exe manage.py diagnostiquer_sysop
+```
+
+Le diagnostic impose une transaction en lecture seule, vérifie `SHOW transaction_read_only`,
+puis exécute uniquement `SELECT 1`. Les délais sont de 10 secondes pour la connexion
+(par hôte/adresse essayé) et de 5 secondes par requête. Aucun import, activation de source
+ou changement de planification n'est effectué. Les erreurs n'affichent pas les paramètres de connexion.
+
+Un succès confirme l'accès au serveur et la protection de la transaction ; il ne confirme pas
+les droits sur les tables métier ni que le compte est limité en lecture seule côté serveur.
+Après ce test, obtenir les vues, les colonnes et les droits de lecture auprès de l'équipe SYSOP
+pour préparer le mapping du portefeuille.
+
+### Configuration du connecteur
+
 1. Sur le serveur, renseigner la variable d'environnement avec un **compte en lecture seule** :
    `SICOM_DATABASE_URL=postgresql://lecteur:***@hote:5432/sicom` (idem `SYSOP_DATABASE_URL`), puis redémarrer
    les services `backend`, `worker` et `beat`.

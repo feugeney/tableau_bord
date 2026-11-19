@@ -107,6 +107,21 @@ les formules de tous les indicateurs sont dans le dictionnaire des indicateurs.
 
 Tout est utilisable au clavier : Tab pour avancer, Entrée pour ouvrir, Échap pour fermer.
 
+### La projection de fin d'exercice
+
+Les pages Dépenses, Recettes fiscales et Recettes douanières affichent une carte **Projection de fin
+d'exercice**. Elle prolonge le montant constaté jusqu'au 31 décembre et donne une **fourchette**, pas un
+chiffre unique.
+
+- Le trait plein est le cumul constaté ; la bande en tirets est la fourchette projetée ; la ligne horizontale
+  en tirets est la cible (crédits ou objectif annuel).
+- **Méthode et fiabilité** détaille le calcul et indique de combien la méthode se serait trompée si on l'avait
+  appliquée plus tôt dans l'année.
+- Dans la page Dépenses, un tableau liste les ministères les plus éloignés de leurs crédits en fin d'exercice.
+
+La projection est **indicative** : elle suppose que le rythme constaté se poursuit. Elle ne connaît ni les
+décisions à venir ni l'accélération habituelle de fin d'année, et elle sous-estime en début d'exécution.
+
 ## 4. Les alertes
 
 La page Synthèse liste les alertes ouvertes, de la plus grave à la moins grave. Chaque alerte indique ce

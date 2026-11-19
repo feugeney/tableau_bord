@@ -38,7 +38,21 @@ class VuePaie(VueDomaine):
         return {"meta": meta("fugas", f), "data": page(f, exercice=f.exercice if f else fc.exercice)}
 
 
+class VueRecettesAdministratives(VueDomaine):
+    """Recettes › Recettes administratives : dividendes SYSOP ; accès du domaine qui détient la donnée."""
+
+    domaine = Domaine.PORTEFEUILLE
+    source_code = "sysop"
+    page = "recettes-administratives"
+
+    def calculer(self, request, f):
+        from apps.portefeuille.services import recettes_administratives
+
+        return recettes_administratives(f)
+
+
 PAGES_DOMAINES = {
+    "tofe": (Domaine.TOFE, "tofe", "apps.core.tofe", "tofe"),
     # préfixe d'URL : (domaine, source, module de services, page journalisée)
     "recettes-fiscales": (Domaine.RECETTES_FISCALES, "safig", "apps.recettes_fiscales.services", "recettes-fiscales"),
     "douanes": (Domaine.DOUANES, "sydonia", "apps.douanes.services", "recettes-douanieres"),

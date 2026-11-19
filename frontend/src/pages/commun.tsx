@@ -42,7 +42,7 @@ export function EtatPage<T>({
   indicateurs?: number;
   precisionDemo?: ReactNode;
 }) {
-  if (requete.isPending) return <SquelettePage indicateurs={indicateurs} />;
+  if (requete.isPending || requete.isPlaceholderData) return <SquelettePage indicateurs={indicateurs} />;
   if (requete.isError) return <ErreurBloc erreur={requete.error} onReessayer={() => requete.refetch()} />;
   const env = requete.data;
   if (!env.data) return <EtatVide meta={env.meta}>{vide}</EtatVide>;
@@ -64,7 +64,7 @@ export function EtatBloc<T>({
   children: (data: T, env: Enveloppe<T>) => ReactNode;
   hauteur?: string;
 }) {
-  if (requete.isPending) return <Squelette className={`${hauteur} w-full`} />;
+  if (requete.isPending || requete.isPlaceholderData) return <Squelette className={`${hauteur} w-full`} />;
   if (requete.isError) return <ErreurBloc erreur={requete.error} onReessayer={() => requete.refetch()} />;
   if (!requete.data.data) return <p className="text-base text-ink-2">Aucune donnée pour ces filtres.</p>;
   return <>{children(requete.data.data, requete.data)}</>;

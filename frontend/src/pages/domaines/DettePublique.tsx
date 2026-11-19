@@ -28,11 +28,7 @@ export default function DettePublique() {
   const r = useDonnees<Donnees>("/dette/");
   return (
     <>
-      <TitrePage
-        exporter="dette-publique"
-        titre="Dette publique"
-        sousTitre="Application de la dette · Direction de la dette"
-      />
+      <TitrePage exporter="dette-publique" titre="Dette publique" sousTitre="SIGAD · Direction de la dette" />
       <EtatPage
         requete={r}
         vide={<ContenuPrevu cle="dette-publique" />}

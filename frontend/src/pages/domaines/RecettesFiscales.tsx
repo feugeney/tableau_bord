@@ -3,10 +3,11 @@ import { HBarList } from "@/components/Barres";
 import { GroupedBarChart } from "@/components/GroupedBarChart";
 import { BandeauKpi, KpiCard } from "@/components/Indicateurs";
 import { Montant, Pourcentage } from "@/components/Montant";
+import { BlocProjection, type Projection } from "@/components/Projection";
 import { Carte } from "@/components/ui/primitives";
 import { nombre, pct } from "@/lib/format";
 
-import { EtatPage, TitrePage, Zone } from "../commun";
+import { EtatPage, Zone } from "../commun";
 import { ContenuPrevu, serieMois, type LigneObjectif } from "./commun";
 
 interface Donnees {
@@ -22,6 +23,8 @@ interface Donnees {
   };
   par_impot: (LigneObjectif & { en_retard: boolean })[];
   mensuel: { mois: number; objectif: number; recouvre: number }[];
+  /** Absente d'une réponse mise en cache avant l'ajout des projections. */
+  projection?: Projection;
   par_centre: LigneObjectif[];
   par_secteur: { libelle: string; recouvre: number }[];
   restes_par_anciennete: { libelle: string; montant: number }[];
@@ -33,11 +36,6 @@ export default function RecettesFiscales() {
   const r = useDonnees<Donnees>("/recettes-fiscales/");
   return (
     <>
-      <TitrePage
-        exporter="recettes-fiscales"
-        titre="Recettes fiscales"
-        sousTitre="SAFIG · Direction générale des impôts"
-      />
       <EtatPage requete={r} vide={<ContenuPrevu cle="recettes-fiscales" />} indicateurs={4}>
         {(d, env) => {
           const i = d.indicateurs;
@@ -133,6 +131,23 @@ export default function RecettesFiscales() {
                   </Carte>
                 </div>
               </Zone>
+
+              {d.projection && (
+                <Zone titre="Projection">
+                  <Carte
+                    id="projection"
+                    titre="Projection de fin d'exercice"
+                    sousTitre="Recouvrement cumulé constaté, puis prolongé jusqu'au 31 décembre"
+                  >
+                    <BlocProjection
+                      p={d.projection}
+                      grandeur="recouvrés"
+                      libelleCible="Objectif annuel"
+                      libelleRealise="Recouvré (cumul)"
+                    />
+                  </Carte>
+                </Zone>
+              )}
 
               <Zone titre="Détail">
                 <div className="grid gap-4 lg:grid-cols-2">

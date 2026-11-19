@@ -1,5 +1,7 @@
 const NOMS: Record<string, string> = {
+  tofe: "TOFE simulé",
   chaine_depense: "Chaîne Dépense",
+  plan_engagement: "Chaîne Dépense · plan d'engagement",
   safig: "SAFIG",
   sydonia: "SYDONIA",
   scie: "SCIE",
@@ -17,6 +19,7 @@ export function nomSource(code: string) {
 }
 
 export const DOMAINES_LIBELLES: Record<string, string> = {
+  tofe: "Pilotage",
   depense: "Dépenses",
   recettes_fiscales: "Recettes fiscales",
   douanes: "Recettes douanières",

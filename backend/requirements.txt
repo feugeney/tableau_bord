@@ -13,4 +13,5 @@ psycopg[binary]>=3.2
 oracledb>=2.4  # python-oracledb
 pandas>=2.2
 openpyxl>=3.1
+reportlab>=4.2,<5
 gunicorn>=23.0

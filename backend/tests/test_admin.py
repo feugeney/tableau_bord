@@ -193,6 +193,7 @@ def test_entrepot(admin):
     assert any(t["table"] == "fait_situation_ligne" for t in d["tables"])
     assert admin.post("/api/v1/admin/entrepot/", {"action": "rafraichir"}, format="json").status_code == 200
     assert admin.post("/api/v1/admin/entrepot/", {"action": "demo"}, format="json").status_code == 200
-    assert Source.objects.filter(statut="demo").count() == 8
+    assert Source.objects.filter(statut="demo").count() == 9
+    assert Source.objects.get(code="tofe").statut == "demo"
     assert admin.post("/api/v1/admin/entrepot/", {"action": "demo_supprimer"}, format="json").status_code == 200
     assert admin.post("/api/v1/admin/entrepot/", {"action": "autre"}, format="json").status_code == 400

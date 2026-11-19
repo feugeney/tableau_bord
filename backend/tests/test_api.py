@@ -166,7 +166,7 @@ def test_synthese_sans_aucune_donnee(cabinet):
     r = cabinet.get("/api/v1/synthese/")
     assert r.status_code == 200
     assert all(k["valeur"] is None for k in r.data["data"]["indicateurs"])
-    assert len(r.data["data"]["sources"]) == 11  # dont Telemo (marchés publics)
+    assert len(r.data["data"]["sources"]) == 13  # dont Telemo, le scénario TOFE et le plan d'engagement
 
 
 def test_depense_sans_donnee(cabinet):

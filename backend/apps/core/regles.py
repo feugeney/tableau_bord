@@ -50,6 +50,11 @@ PARAMETRES_DEFAUT: dict[str, tuple[Any, str, str]] = {
         "taux",
     ),
     "delai_passation_max_jours": (90, "Délai de passation au-delà duquel un marché est signalé", "jours"),
+    "projection_engagement_min": (
+        0.80,
+        "Taux d'engagement projeté au 31 décembre sous lequel une alerte est levée (à confirmer : DGB)",
+        "taux",
+    ),
 }
 
 
@@ -100,16 +105,34 @@ def taux(numerateur: Optional[Nombre], denominateur: Optional[Nombre]) -> Option
     return _dec(numerateur) / d
 
 
+# Taux de la chaîne de la dépense (décision du 18/11/2026) : chaque étape est rapportée
+# à l'étape qui la précède — crédits → engagé → liquidé → ordonnancé → VBP / payé.
+# Montants bruts de la situation ; les rapports aux crédits portent le suffixe « _sur_credits ».
+
+
 def taux_engagement(engage, credits_actuels):
+    """Engagé / crédits actuels."""
     return taux(engage, credits_actuels)
 
 
-def taux_ordonnancement(ordonnance, credits_actuels):
-    return taux(ordonnance, credits_actuels)
+def taux_liquidation(liquide, engage):
+    """Liquidé / engagé."""
+    return taux(liquide, engage)
 
 
-def taux_paiement(paye, credits_actuels):
-    return taux(paye, credits_actuels)
+def taux_ordonnancement(ordonnance, liquide):
+    """Ordonnancé / liquidé."""
+    return taux(ordonnance, liquide)
+
+
+def taux_vbp(vbp, ordonnance):
+    """Vu bon à payer / ordonnancé."""
+    return taux(vbp, ordonnance)
+
+
+def taux_paiement(paye, ordonnance):
+    """Payé / ordonnancé."""
+    return taux(paye, ordonnance)
 
 
 # --------------------------------------------------------------- paiement ajusté
@@ -297,3 +320,8 @@ def entente_directe_excessive(part: Nombre | None, surcharges: Optional[Mapping[
 
 def delai_passation_excessif(jours: Nombre | None, surcharges: Optional[Mapping[str, Any]] = None) -> bool:
     return jours is not None and _dec(jours) > _dec(parametre("delai_passation_max_jours", surcharges))
+
+
+def projection_engagement_faible(taux_haut: Nombre | None, surcharges: Optional[Mapping[str, Any]] = None) -> bool:
+    """Même dans l'hypothèse haute, l'engagement projeté en fin d'exercice reste sous le seuil."""
+    return taux_haut is not None and _dec(taux_haut) < _dec(parametre("projection_engagement_min", surcharges))

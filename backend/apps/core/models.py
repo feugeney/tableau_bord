@@ -19,6 +19,7 @@ class Domaine(models.TextChoices):
     PORTEFEUILLE = "portefeuille", "Portefeuille de l'État"
     MARCHES_PUBLICS = "marches_publics", "Marchés publics"
     PREPARATION = "preparation", "Préparation budgétaire"
+    TOFE = "tofe", "Tableau des opérations financières de l'État"
 
 
 class Role(models.TextChoices):
@@ -98,6 +99,26 @@ class Source(models.Model):
 
     def __str__(self):
         return f"{self.application} ({self.code})"
+
+
+class FluxETL(models.Model):
+    code = models.SlugField(max_length=60, unique=True)
+    nom = models.CharField(max_length=160)
+    source = models.ForeignKey(Source, on_delete=models.PROTECT, related_name="flux_etl")
+    profil = models.CharField(
+        max_length=40,
+        choices=[
+            ("sysop_portefeuille", "Portefeuille SYSOP"),
+            ("oracle_chaine_depense", "Chaîne Dépense Oracle"),
+        ],
+    )
+    exercice = models.PositiveSmallIntegerField()
+    actif = models.BooleanField(default=False)
+    planification_cron = models.CharField(max_length=64, blank=True)
+
+    class Meta:
+        db_table = "core_flux_etl"
+        ordering = ["nom"]
 
 
 class StatutChargement(models.TextChoices):

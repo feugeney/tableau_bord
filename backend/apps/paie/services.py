@@ -71,6 +71,7 @@ def page(f: Filtres | None, exercice: int | None = None) -> dict:
                     "part_budget": regles.taux(perso["credit_actuel"], total["credit_actuel"]) if total else None,
                     "montant_ordonnance": perso["montant_ordonnance"],
                     "taux_ordonnancement": perso["taux_ordonnancement"],
+                    "taux_ordonnancement_sur_credits": perso["taux_ordonnancement_sur_credits"],
                 }
             ),
         ),

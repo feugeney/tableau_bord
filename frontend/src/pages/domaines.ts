@@ -6,6 +6,38 @@ export interface DefinitionDomaine {
 }
 
 export const DOMAINES: Record<string, DefinitionDomaine> = {
+  tofe: {
+    titre: "Tableau des opérations financières de l'État",
+    source: "TOFE · illustration du cadre guinéen",
+    api: "/tofe/",
+    contenu: [
+      "Recettes et dons, charges et acquisition nette d'actifs non financiers",
+      "Soldes global et primaire, passage à la caisse, financement intérieur et extérieur",
+      "LFI/LFR simulées, réalisé cumulé, période équivalente N−1 et contrôles d'équilibre",
+    ],
+  },
+  "tresor-public": {
+    titre: "Tableau du Trésor public",
+    source: "Trésor public · à raccorder",
+    api: "",
+    contenu: [
+      "Position de trésorerie de l'État : solde du compte unique du Trésor et des comptes de l'État",
+      "Plan de trésorerie mensuel : encaissements et décaissements prévus et réalisés",
+      "Instances de paiement et délais de règlement",
+      "Cohérence avec le plan d'engagement : plafonds trimestriels et capacité de paiement",
+    ],
+  },
+  "recettes-administratives": {
+    titre: "Recettes administratives",
+    source: "Ministères collecteurs et Trésor public · à raccorder",
+    api: "",
+    contenu: [
+      "Droits et frais administratifs : passeports, visas, cartes grises, permis, actes et certificats",
+      "Redevances, produits du domaine de l'État, amendes et pénalités",
+      "Recouvrement par ministère collecteur comparé à l'objectif de la loi de finances",
+      "Reversement au Trésor public et écart entre montants perçus et reversés",
+    ],
+  },
   "recettes-fiscales": {
     titre: "Recettes fiscales",
     source: "SAFIG · Direction générale des impôts",
@@ -38,7 +70,7 @@ export const DOMAINES: Record<string, DefinitionDomaine> = {
   },
   "dette-publique": {
     titre: "Dette publique",
-    source: "Application de la dette · Direction de la dette",
+    source: "SIGAD · Direction de la dette",
     api: "/dette/indicateurs/",
     contenu: [
       "Encours total en % du PIB face au seuil CEDEAO de 70 %, dette extérieure et intérieure",

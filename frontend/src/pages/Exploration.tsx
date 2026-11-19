@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { FileSpreadsheet, Play, Plus, X } from "lucide-react";
+import { FileSpreadsheet, FileText, Play, Plus, X } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { api, telecharger } from "@/api/client";
@@ -175,6 +175,14 @@ function Resultats({ requete }: { requete: Requete }) {
             }}
           >
             <FileSpreadsheet className="h-4 w-4" aria-hidden /> Exporter (Excel)
+          </Bouton>
+          <Bouton
+            onClick={() => {
+              setEchecExport(false);
+              telecharger("/exploration/export.pdf", { q }).catch(() => setEchecExport(true));
+            }}
+          >
+            <FileText className="h-4 w-4" aria-hidden /> Exporter (PDF)
           </Bouton>
         </span>
       }

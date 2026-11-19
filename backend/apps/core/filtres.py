@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from typing import Optional
 
@@ -13,6 +13,19 @@ from apps.referentiels.models import NATURE_VERS_TITRE
 
 from .models import Source, StatutChargement
 
+# Critères multiples de la page Dépenses (paramètres d'URL, valeurs séparées par des virgules).
+CRITERES = (
+    "ministeres",
+    "programmes",
+    "titres",
+    "fonctions",
+    "piliers",
+    "types_budget",
+    "zones",
+    "sources",
+    "bailleurs",
+)
+
 
 @dataclass
 class Filtres:
@@ -21,13 +34,15 @@ class Filtres:
     nature: Optional[str] = None
     section: Optional[str] = None
     paiement: str = "ajuste"
+    criteres: dict = field(default_factory=dict)
 
     @property
     def titre(self) -> Optional[str]:
         return NATURE_VERS_TITRE.get(self.nature) if self.nature else None
 
     def cle_cache(self) -> str:
-        return f"{self.exercice}:{self.date_situation}:{self.nature}:{self.section}:{self.paiement}"
+        criteres = ";".join(f"{k}={','.join(v)}" for k, v in sorted(self.criteres.items()) if v)
+        return f"{self.exercice}:{self.date_situation}:{self.nature}:{self.section}:{self.paiement}:{criteres}"
 
     def where(self, alias: str = "", avec_section: bool = True, avec_titre: bool = True) -> tuple[str, list]:
         """Clause WHERE paramétrée pour les vues mart (colonnes exercice, date_situation, section_code, titre)."""
@@ -40,6 +55,12 @@ class Filtres:
         if avec_titre and self.titre:
             clauses.append(f"{p}titre = %s")
             params.append(self.titre)
+        # Critères multiples présents dans toutes les tables (ministère, titre) ; les autres : apps.depense.criteres.
+        for cle, colonne, actif in (("ministeres", "section_code", avec_section), ("titres", "titre", avec_titre)):
+            valeurs = self.criteres.get(cle) if actif else None
+            if valeurs:
+                clauses.append(f"{p}{colonne} IN ({', '.join(['%s'] * len(valeurs))})")
+                params.extend(valeurs)
         return " AND ".join(clauses), params
 
 
@@ -74,7 +95,16 @@ def resoudre_filtres(params, source_code: str) -> Filtres:
         exercice = situations[0][0]
     if date_situation is None:
         date_situation = next((d for e, d in situations if e == exercice), None)
-    return Filtres(exercice, date_situation, nature, params.get("section") or None, paiement)
+    elif (exercice, date_situation) not in situations:
+        date_situation = None
+    criteres = {}
+    for cle in CRITERES:
+        valeurs = tuple(sorted({v.strip() for v in (params.get(cle) or "").split(",") if v.strip()}))
+        if len(valeurs) > 200 or any(len(v) > 80 for v in valeurs):
+            raise ValidationError({cle: "Trop de valeurs ou valeur trop longue."})
+        if valeurs:
+            criteres[cle] = valeurs
+    return Filtres(exercice, date_situation, nature, params.get("section") or None, paiement, criteres)
 
 
 def statut_source(source_code: str) -> str:

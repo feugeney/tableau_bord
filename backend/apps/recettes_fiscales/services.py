@@ -5,7 +5,7 @@ from __future__ import annotations
 from django.db.models import Max, Sum
 
 from apps.core import regles
-from apps.core.domaines import chargements_actifs, filtres_source, somme, ventiler
+from apps.core.domaines import chargements_actifs, filtres_source, projection_recettes, somme, ventiler
 from apps.core.filtres import Filtres
 
 from .models import FaitContentieux, FaitContribuables, FaitRecouvrementFiscal, FaitResteARecouvrer
@@ -29,6 +29,10 @@ def page(f: Filtres) -> dict:
     for ligne in par_impot:
         ligne["taux"] = regles.taux(ligne["recouvre"], ligne["objectif"])
         ligne["en_retard"] = regles.recouvrement_en_retard(ligne["recouvre"], ligne["objectif"])
+    mensuel = [
+        {"mois": ligne["libelle"], "objectif": ligne["objectif"], "recouvre": ligne["recouvre"]}
+        for ligne in ventiler(rec, "mois", "objectif", "recouvre", ordre="mois")
+    ]
     return {
         "indicateurs": {
             "recouvre": tot["recouvre"],
@@ -41,10 +45,8 @@ def page(f: Filtres) -> dict:
             "taux_teledeclaration": regles.taux(c["teledeclarants"], c["actifs"]),
         },
         "par_impot": par_impot,
-        "mensuel": [
-            {"mois": ligne["libelle"], "objectif": ligne["objectif"], "recouvre": ligne["recouvre"]}
-            for ligne in ventiler(rec, "mois", "objectif", "recouvre", ordre="mois")
-        ],
+        "mensuel": mensuel,
+        "projection": projection_recettes(mensuel, f),
         "par_centre": ventiler(rec, "centre__libelle", "objectif", "recouvre"),
         "par_secteur": ventiler(rec, "secteur__libelle", "recouvre"),
         "restes_par_anciennete": ventiler(restes, "anciennete", "montant"),

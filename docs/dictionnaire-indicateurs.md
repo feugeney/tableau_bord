@@ -1,6 +1,6 @@
 # Dictionnaire des indicateurs
 
-Système intégré de pilotage des finances publiques (tableau de bord de la Ministre) — Ministère de l'Économie, des Finances et du Budget (République de Guinée).
+Tableau de bord des finances publiques — Ministère de l'Économie, des Finances et du Budget (République de Guinée).
 
 Ce document définit chaque chiffre affiché : ce qu'il mesure, comment il est calculé, d'où il vient et quels
 seuils déclenchent une alerte. Les seuils sont réglables sans intervention technique
@@ -28,8 +28,11 @@ seuils déclenchent une alerte. Les seuils sont réglables sans intervention tec
 | Engagé | Σ `credits engages` (onglet Situation courante). | — |
 | Taux d'engagement | Engagé / crédits actuels. | voir statut des ministères |
 | Liquidé, ordonnancé, VBP, payé | Σ des colonnes correspondantes de Situation courante. | Note si liquidé > engagé |
-| Taux d'ordonnancement | Ordonnancé / crédits actuels. | — |
-| Taux de paiement | Payé / crédits actuels. | — |
+| Taux de liquidation | Liquidé / engagé, montants bruts. Chaque étape est rapportée à la précédente (décision du 18/11/2026). | — |
+| Taux d'ordonnancement | Ordonnancé / liquidé, montants bruts. | — |
+| Taux de VBP | Vu bon à payer / ordonnancé. Ce ratio n'est pas un montant d'impayés. | — |
+| Taux de paiement | Payé / ordonnancé, montants bruts (hors chaîne inclus). | — |
+| Liquidé, ordonnancé, payé / crédits | Ratios d'exécution budgétaire complémentaires, nommés explicitement (`_sur_credits`). | — |
 | Ordonnancé ajusté | Ordonnancé − ordonnancé des engagements « hors chaîne ». | — |
 | Payé ajusté | Payé − payé des engagements « hors chaîne ». | — |
 | Payé / ordonnancé ajusté | Payé ajusté / ordonnancé ajusté. | < 35 % : paiements en retard (voir statut) |
@@ -158,10 +161,35 @@ Flux F3 (réservations de crédit), F4 (marchés immatriculés) et F5 (paiements
 | Dépenses engagées | Chaîne Dépense (taux d'engagement). |
 | Reste à payer ajusté | Chaîne Dépense. |
 | Trésorerie fin de période | SCIE (jours de décaissements). |
-| Encours de la dette | Application de la dette (ratio dette / PIB face au seuil CEDEAO). |
+| Encours de la dette | SIGAD (ratio dette / PIB face au seuil CEDEAO). |
 | Dépenses de personnel ordonnancées | Chaîne Dépense, titre 2. |
 
-## 12. Contrôles de qualité des données (Chaîne Dépense)
+## 12. Projections de fin d'exercice
+
+Affichées dans les pages Dépenses, Recettes fiscales et Recettes douanières (carte « Projection de fin
+d'exercice »). Le réalisé cumulé est prolongé jusqu'au 31 décembre de l'exercice ; le résultat est une
+**fourchette**, bornée par la méthode la plus basse et la plus haute.
+
+| Méthode | Formule |
+|---|---|
+| Rythme moyen | Réalisé + (réalisé de la série / jours écoulés depuis le début du premier mois d'exécution) × jours restants |
+| Rythme récent | Réalisé + (montant des trois derniers mois complets / leurs jours) × jours restants. Il faut au moins deux mois complets. |
+| Profil de l'exercice précédent | Réalisé × (total de l'exercice précédent / son cumul à la même date). Seulement si l'exercice précédent est chargé. |
+
+| Règle | Détail |
+|---|---|
+| Conditions | Pas de projection avant 60 jours d'exécution, ni pour un exercice terminé (situation postérieure au 31 décembre). |
+| Point de départ | Le cumul officiel de la situation (crédits engagés) ; la série mensuelle ne sert qu'à mesurer le rythme. |
+| Plafond | L'engagement projeté ne dépasse pas les crédits actuels. Une recette projetée peut dépasser son objectif. |
+| Cible | Dépenses : crédits actuels. Recettes : objectif annuel, seulement si les objectifs des douze mois sont chargés. |
+| Par ministère | Milieu de la fourchette, pour les ministères de plus de 20 Mds de crédits ; classés du plus éloigné de ses crédits au plus proche. |
+| Vérification | La méthode est appliquée à la fin de chaque mois passé et comparée au réalisé d'aujourd'hui ; l'écart est affiché dans « Méthode et fiabilité ». |
+| Alerte | Fourchette haute / crédits < 80 % (`projection_engagement_min`, à confirmer avec la DGB) : alerte (vigilance). |
+
+Limites : la projection prolonge le rythme constaté. Elle ignore les décisions à venir et, tant qu'un seul
+exercice est chargé, l'accélération habituelle de fin d'année. En début d'exécution, elle sous-estime nettement.
+
+## 13. Contrôles de qualité des données (Chaîne Dépense)
 
 | Contrôle | Niveau | Effet |
 |---|---|---|

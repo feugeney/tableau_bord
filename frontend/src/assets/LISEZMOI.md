@@ -13,3 +13,7 @@ Pour passer au fichier officiel fourni par le ministère :
 
 L'en-tête, l'écran de connexion et l'impression utilisent le fichier automatiquement. Sans fichier,
 un emplacement neutre est affiché. Aucune armoirie n'est dessinée dans le code.
+
+## Logos de l’écran de connexion
+
+- `sceau-mef.png` : sceau du Ministère de l’Économie et des Finances, découpé en cercle sur fond transparent, entre le nom du ministère et le titre.

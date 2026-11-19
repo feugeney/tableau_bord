@@ -26,7 +26,7 @@ flux d'alimentation (mois 4-6). L'ordre proposé ici est différent, pour deux r
 | 4. Raccordement des sources | M2 – M9 | Une application à la fois : accès, mapping, chargement, rapprochement des totaux avec la direction | Directions | Chaîne Dépense faite ; huit à raccorder |
 | 5. Tableaux de bord et exploration | M2 – M9 | Chaque page passe de l'illustration au réel au fil des raccordements ; ajustements demandés par les directions | Phase 4 | Pages faites, en illustration |
 | 6. Échanges avec les partenaires | M3 – M6 | SFTP, messagerie, jetons de partage, schémas remis aux partenaires | Partenaires | Développé ; à mettre en service |
-| 7. Analyses prédictives | M5 – M8 | Projections de fin d'exercice, d'abord sur les dépenses | Historique suffisant | À faire |
+| 7. Analyses prédictives | M5 – M8 | Projections de fin d'exercice ; affinage avec l'exercice précédent, puis extension aux autres domaines | Historique chargé | Première version faite |
 | 8. Second site et reprise | M6 – M9 | Hébergement cloud, réplication, plan de reprise | Décision du ministère | À décider |
 | 9. Données ouvertes | M8 – M10 | Jeux publiables, portail | Décision du ministère | À décider |
 | 10. Formation et transfert | M9 – M11 | Utilisateurs (par profil), administrateurs, équipe technique du SMSI | SMSI | Manuels rédigés |

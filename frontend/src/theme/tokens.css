@@ -1,5 +1,5 @@
 /*
- * Jetons de design — Système intégré de pilotage des finances publiques (MEFB, République de Guinée).
+ * Jetons de design — Tableau de bord des finances publiques (MEFB, République de Guinée).
  * Seul fichier où figurent des valeurs de couleur. Les composants n'utilisent que ces variables.
  */
 
@@ -45,6 +45,16 @@
   --phase-6: #104281;
   --serie-1: #2a78d6;
   --serie-2: #b8860b;
+  /* Répartitions (anneaux) : 6 teintes catégorielles dans un ordre fixe, validées CVD
+     (validate_palette.js, surface #ffffff) ; « Autres » en gris neutre. Contraste < 3:1 pour
+     les teintes 3 à 5 : chaque part est donc aussi écrite (nom, % et montant) à côté de l'anneau. */
+  --categ-1: #2a78d6;
+  --categ-2: #eb6834;
+  --categ-3: #1baf7a;
+  --categ-4: #eda100;
+  --categ-5: #e87ba4;
+  --categ-6: #008300;
+  --categ-autres: #a3acb8;
   --objectif: var(--ink-2);
 
   /* Variables du thème shadcn/ui */
@@ -87,6 +97,14 @@
 
   /* Série 2 : l'or clair garde 3:1 sur la surface sombre (validé CVD). */
   --serie-2: #b8860b;
+  /* Mêmes teintes, pas de la rampe choisis pour la surface sombre (#122033, tous ≥ 3:1). */
+  --categ-1: #3987e5;
+  --categ-2: #d95926;
+  --categ-3: #199e70;
+  --categ-4: #c98500;
+  --categ-5: #d55181;
+  --categ-6: #0ca30c;
+  --categ-autres: #5d6b7e;
 
   color-scheme: dark;
 }
@@ -106,6 +124,13 @@
     --zebra: #f6f7f9;
     --navy: #16314e;
     --gold: #b8860b;
+    --categ-1: #2a78d6;
+    --categ-2: #eb6834;
+    --categ-3: #1baf7a;
+    --categ-4: #eda100;
+    --categ-5: #e87ba4;
+    --categ-6: #008300;
+    --categ-autres: #a3acb8;
     color-scheme: light;
   }
 }

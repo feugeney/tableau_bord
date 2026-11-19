@@ -1,5 +1,6 @@
 import { FileJson, PlugZap, Save, Upload } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
 
 import { messageErreur, useAdmin, useListesAdmin, useMutationAdmin, type SourceAdmin } from "@/api/admin";
 import { api, telecharger } from "@/api/client";
@@ -34,14 +35,14 @@ export default function Sources() {
   return (
     <Carte
       id="sources"
-      titre="Sources et connecteurs"
-      sousTitre="Type de connecteur, planification, configuration (sans secret : les identifiants restent dans les variables d'environnement), import de fichier."
+      titre="Connexions aux sources"
+      sousTitre="Configurer et tester les accès aux systèmes d'origine. Les identifiants restent dans les variables d'environnement. Les traitements SYSOP et Chaîne Dépense se règlent dans Flux ETL."
     >
       <EtatBloc requete={r}>
         {(sources) => (
           <DataTable
             donnees={sources}
-            libelle="Sources de l'entrepôt"
+            libelle="Connexions aux sources de données"
             onLigne={setChoisie}
             colonnes={[
               { header: "Application", accessorKey: "application" },
@@ -84,7 +85,9 @@ export default function Sources() {
                 header: "Planification",
                 accessorKey: "planification_cron",
                 cell: ({ row }) =>
-                  AUTOMATIQUES.includes(row.original.connecteur) ? (
+                  ["sysop", "chaine_depense"].includes(row.original.code) ? (
+                    <span className="text-ink-2">Dans Flux ETL</span>
+                  ) : AUTOMATIQUES.includes(row.original.connecteur) ? (
                     <code translate="no">{row.original.planification_cron || "—"}</code>
                   ) : (
                     <span className="text-ink-2">Import manuel</span>
@@ -177,23 +180,33 @@ function PanneauSource({ source, onFermer }: { source: SourceAdmin; onFermer: ()
             )}
           </Champ>
         </div>
-        <Champ
-          libelle="Planification (cron)"
-          aide="Ex. « 0 2 * * * » : chaque nuit à 2 h. Vide : chargement manuel uniquement."
-        >
-          {(id, d) => (
-            <Entree
-              id={id}
-              name="planification_cron"
-              autoComplete="off"
-              spellCheck={false}
-              aria-describedby={d}
-              value={f.planification_cron}
-              onChange={(e) => setF({ ...f, planification_cron: e.target.value })}
-              placeholder="0 2 * * *…"
-            />
-          )}
-        </Champ>
+        {["sysop", "chaine_depense"].includes(source.code) ? (
+          <p className="text-sm text-ink-2">
+            L'exercice, l'activation et la programmation sont définis dans{" "}
+            <Link className="underline" to="/administration/flux-etl">
+              Flux ETL
+            </Link>
+            .
+          </p>
+        ) : (
+          <Champ
+            libelle="Planification (cron)"
+            aide="Ex. « 0 2 * * * » : chaque nuit à 2 h. Vide : chargement manuel uniquement."
+          >
+            {(id, d) => (
+              <Entree
+                id={id}
+                name="planification_cron"
+                autoComplete="off"
+                spellCheck={false}
+                aria-describedby={d}
+                value={f.planification_cron}
+                onChange={(e) => setF({ ...f, planification_cron: e.target.value })}
+                placeholder="0 2 * * *…"
+              />
+            )}
+          </Champ>
+        )}
         <Champ
           libelle="Configuration du connecteur (JSON)"
           aide={

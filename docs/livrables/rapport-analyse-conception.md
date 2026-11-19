@@ -183,7 +183,7 @@ toutes les 5 minutes.
 ## 6. Règles de gestion, seuils et alertes
 
 Les règles sont centralisées dans un seul module (`apps/core/regles.py`) et tous les seuils sont paramétrables
-depuis l'administration, sans intervention sur le code. Seize paramètres et quinze règles d'alerte sont en
+depuis l'administration, sans intervention sur le code. Dix-sept paramètres et seize règles d'alerte sont en
 place ; leur liste et leurs formules figurent dans `../dictionnaire-indicateurs.md`.
 
 Les alertes ont trois niveaux de gravité (critique, sérieux, vigilance), sont recalculées à chaque
@@ -209,6 +209,8 @@ chargement, et peuvent être marquées comme traitées.
 - **Tableau de bord** : dix pages (synthèse, dépenses, trésorerie, recettes fiscales, recettes douanières,
   dette, investissements, patrimoine, portefeuille, marchés publics). Chaque chiffre affiche sa source, son
   statut (réel ou illustration) et sa date de situation.
+- **Projections** : fourchette de fin d'exercice pour les dépenses et les recettes, par prolongement du
+  rythme constaté, avec vérification rétrospective (voir le dictionnaire des indicateurs).
 - **Exploration** : requêtes libres par jeu de données, axes, mesures et filtres, pour les analystes.
 - **Exports** : Excel pour chaque page et pour chaque résultat d'exploration ; impression A4 paysage.
 - **Outil de BI** : compte PostgreSQL en lecture seule sur les vues agrégées et les dimensions.

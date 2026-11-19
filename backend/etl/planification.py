@@ -12,7 +12,11 @@ CONNECTEURS_AUTOMATIQUES = {TypeConnecteur.ORACLE_CHAINE_DEPENSE, TypeConnecteur
 
 def synchroniser_planification(source: Source) -> None:
     nom = f"chargement-{source.code}"
-    if not source.planification_cron or source.connecteur not in CONNECTEURS_AUTOMATIQUES:
+    if (
+        source.code in ("sysop", "chaine_depense")
+        or not source.planification_cron
+        or source.connecteur not in CONNECTEURS_AUTOMATIQUES
+    ):
         PeriodicTask.objects.filter(name=nom).delete()
         return
     minute, heure, jour, mois, jour_semaine = source.planification_cron.split()
@@ -45,6 +49,11 @@ def planifier_releve_depots() -> None:
 
 
 def synchroniser_tout() -> None:
+    from apps.core.etl_admin import synchroniser_flux
+    from apps.core.models import FluxETL
+
     for s in Source.objects.all():
         synchroniser_planification(s)
+    for flux in FluxETL.objects.all():
+        synchroniser_flux(flux)
     planifier_releve_depots()

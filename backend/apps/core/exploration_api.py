@@ -98,7 +98,7 @@ class ExportView(APIView):
         filtres = " ; ".join(f"{x['champ']} {x['operateur']} {x.get('valeur')}" for x in q.get("filtres") or [])
         for ligne in (
             ["République de Guinée · Ministère de l'Économie, des Finances et du Budget"],
-            [f"Système intégré de pilotage des finances publiques — Exploration : {jeu['libelle']}"],
+            [f"Tableau de bord des finances publiques — Exploration : {jeu['libelle']}"],
             ["Document de travail – diffusion restreinte"],
             [],
             ["Jeu de données", f"{jeu['libelle']} ({jeu['code']})"],
@@ -158,4 +158,52 @@ class ExportView(APIView):
         )
         date_nom = m.get("date_situation") or timezone.localdate().isoformat()
         reponse["Content-Disposition"] = f'attachment; filename="exploration-{jeu["code"]}-{date_nom}.xlsx"'
+        return reponse
+
+
+class ExportPdfView(APIView):
+    """Rapport d'exploration : données autorisées, limite explicite pour un document lisible."""
+
+    permission_classes = PERMISSIONS
+
+    def get(self, request):
+        from .export_pdf import BlocPdf, CollecteurPdf, creer_pdf
+
+        r = _resultat(request, 2000)
+        m = meta(r["jeu"]["source"], r["situation"])
+        rapport = CollecteurPdf("Exploration - " + r["jeu"]["libelle"], m)
+        colonnes = r["colonnes"]
+        libelles = {c["code"]: c["libelle"] for c in colonnes}
+        lignes = [
+            {
+                c["code"]: (
+                    x.get(f"{c['code']}__libelle", x.get(c["code"])) if c["type"] != "mesure" else x.get(c["code"])
+                )
+                for c in colonnes
+            }
+            for x in r["lignes"]
+        ]
+        rapport.blocs.append(BlocPdf("Résultats - montants en GNF", lignes, m, brut=True, libelles=libelles))
+        rapport.blocs.append(BlocPdf("Totaux de la requête - GNF", r["totaux"], m, brut=True, libelles=libelles))
+        note = (
+            f"Exploration : montants en GNF, sans conversion en milliards. {len(lignes)} lignes sur {r['nb_groupes']}. "
+            + (
+                "Document limité à 2 000 lignes ; utiliser Excel pour les résultats plus volumineux."
+                if r["tronque"]
+                else "Résultat complet."
+            )
+        )
+        contenu = creer_pdf(
+            [rapport], request.user.get_username(), "Exploration des données", filtres=str(r["requete"]), note=note
+        )
+        journaliser(
+            request,
+            JournalAudit.Action.EXPORT,
+            objet=f"exploration : {r['jeu']['code']}.pdf",
+            detail={"requete": r["requete"]},
+        )
+        reponse = HttpResponse(contenu, content_type="application/pdf")
+        jour = m.get("date_situation") or timezone.localdate().isoformat()
+        reponse["Content-Disposition"] = f'attachment; filename="exploration-{r["jeu"]["code"]}-{jour}.pdf"'
+        reponse["Cache-Control"] = "private, no-store"
         return reponse

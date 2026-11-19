@@ -32,6 +32,7 @@ from .reponses import PARAMETRES_COMMUNS, meta
 
 # page : (domaine, source principale, titre)
 PAGES = {
+    "tofe": (Domaine.TOFE, "tofe", "TOFE — données d'illustration"),
     "synthese": (Domaine.SYNTHESE, "chaine_depense", "Synthèse"),
     "depenses": (Domaine.DEPENSE, "chaine_depense", "Dépenses"),
     "investissements": (Domaine.INVESTISSEMENT, "chaine_depense", "Investissements"),
@@ -45,6 +46,7 @@ PAGES = {
     "marches-publics": (Domaine.MARCHES_PUBLICS, "telemo", "Marchés publics"),
 }
 MODULES = {
+    "tofe": "apps.core.tofe",
     "recettes-fiscales": "apps.recettes_fiscales.services",
     "recettes-douanieres": "apps.douanes.services",
     "tresorerie": "apps.tresor.services",
@@ -56,8 +58,33 @@ MODULES = {
 
 # Champs exprimés en GNF (convertis en milliards) et champs exprimés en ratio (format %).
 MONTANTS = {
+    "credit_reserve",
+    "montant_bloque",
+    "disponible_reconstitue",
+    "ecart_disponibilite",
+    "avance_demarrage",
+    "montant_regie",
+    "detail_brut",
+    "detail_comparable",
+    "ecart_absolu",
+    "lfi",
+    "lfr",
+    "objectif_cumule",
+    "realise_n1",
+    "recettes_dons",
+    "depenses",
+    "solde_global",
+    "solde_primaire",
+    "solde_caisse",
+    "besoin_financement",
+    "financement",
+    "ecart_financement",
     "credit_initial_lfi",
     "credit_lfr",
+    "brut",
+    "comparable",
+    "ecart_perimetre",
+    "ecart_reference",
     "credit_actuel",
     "credit_disponible",
     "credit_engage",
@@ -116,10 +143,21 @@ MONTANTS = {
     "interets_engages",
 }
 TAUX = {
+    "part_immobilisee",
+    "couverture",
+    "ratio_solde_pib",
+    "pression_fiscale",
+    "taux_recettes",
+    "taux_depenses",
     "taux",
     "taux_engagement",
     "taux_ordonnancement",
     "taux_paiement",
+    "taux_vbp",
+    "taux_liquidation",
+    "taux_liquidation_sur_credits",
+    "taux_ordonnancement_sur_credits",
+    "taux_paiement_sur_credits",
     "variation_lfi",
     "paye_sur_ordonnance",
     "part",
@@ -139,6 +177,33 @@ TAUX = {
     "part_avenants",
 }
 LIBELLES = {
+    "credit_reserve": "Crédits réservés",
+    "montant_bloque": "Crédits bloqués",
+    "disponible_reconstitue": "Solde calculé après engagement, réservation et blocage",
+    "ecart_disponibilite": "Disponible source moins solde calculé",
+    "part_immobilisee": "Part réservée ou bloquée",
+    "mediane_jours": "Délai médian (jours calendaires)",
+    "p90_jours": "90e percentile (jours calendaires)",
+    "paires_valides": "Paires de dates valides",
+    "couverture": "Couverture des dates",
+    "sans_date_fin": "Sans date de visa",
+    "delais_negatifs": "Délais négatifs exclus",
+    "dates_futures": "Dates futures exclues",
+    "detail_brut": "Détail brut reçu",
+    "detail_comparable": "Détail comparable",
+    "cles_en_ecart": "Clés d'imputation en écart",
+    "ecart_absolu": "Somme des écarts absolus par imputation",
+    "avance_demarrage": "Avances APAD enregistrées",
+    "montant_regie": "Régies enregistrées",
+    "numero_apad": "Numéro APAD",
+    "numero_marche": "Numéro de marché",
+    "libelle_projet": "Projet ou service",
+    "date_creation": "Date de création",
+    "gestionnaire": "Gestionnaire",
+    "lfi": "LFI simulée",
+    "lfr": "LFR simulée",
+    "objectif_cumule": "Prévision cumulée simulée",
+    "realise_n1": "Réalisé N−1 simulé à période équivalente",
     "libelle": "Libellé",
     "libelle_court": "Libellé court",
     "code": "Code",
@@ -149,8 +214,14 @@ LIBELLES = {
     "montant_ordonnance": "Ordonnancé",
     "montant_paye": "Payé",
     "credit_disponible": "Disponible",
-    "reste_a_payer": "Reste à payer",
+    "reste_a_payer": "Solde ordonnancé non payé (à rapprocher)",
     "taux_engagement": "Taux d'engagement",
+    "taux_transmission": "Taux selon les critères de validation des états",
+    "etats_non_transmis": "Organismes sans validation établie",
+    "brut": "Engagements bruts",
+    "comparable": "Engagements comparables",
+    "ecart_perimetre": "Écart de périmètre",
+    "ecart_reference": "Écart résiduel avec la situation budgétaire",
     "paye_sur_ordonnance": "Payé / ordonnancé",
     "recouvre": "Recouvré",
     "objectif": "Objectif",
@@ -178,7 +249,10 @@ LIBELLES = {
     "encours": "Encours",
     "prevu": "Prévu",
     "paye": "Payé",
-    "vote": "Voté",
+    "vote": "Attendu renseigné",
+    "dividendes_votes": "Dividendes attendus renseignés",
+    "transferts": "Contexte budgétaire global du titre 4",
+    "reste_a_payer_risque_arriere": "Solde associé aux engagements anciens (non certifié comme arriérés)",
     "encaisse": "Encaissé",
     "valeur_nette": "Valeur nette",
     "valeur_brute": "Valeur brute",
@@ -198,8 +272,13 @@ LIBELLES = {
     "application": "Application",
     "structure": "Structure",
     "variation_lfi": "Variation par rapport à la LFI",
-    "taux_ordonnancement": "Taux d'ordonnancement",
-    "taux_paiement": "Taux de paiement",
+    "taux_liquidation": "Liquidé / engagé",
+    "taux_ordonnancement": "Ordonnancé / liquidé",
+    "taux_vbp": "VBP / ordonnancé",
+    "taux_paiement": "Payé / ordonnancé",
+    "taux_liquidation_sur_credits": "Liquidé / crédits actuels",
+    "taux_ordonnancement_sur_credits": "Ordonnancé / crédits actuels",
+    "taux_paiement_sur_credits": "Payé / crédits actuels",
     "credits_non_engages": "Crédits non engagés",
     "montant_liquide": "Liquidé",
     "montant_vbp": "Vu bon pour paiement",
@@ -219,7 +298,7 @@ LIBELLES = {
     "credits_projets_sans_engagement": "Crédits des projets sans engagement",
     "part_budget": "Part du budget",
     "anciennete_mois": "Ancienneté (mois)",
-    "risque_arriere": "Risque d'arriérés",
+    "risque_arriere": "Engagement ancien — échéance non évaluée",
     "mois_creation": "Mois de création",
     "periode_complementaire": "Période complémentaire",
     "decembre": "Décembre",
@@ -324,7 +403,7 @@ class Classeur:
         m = self.meta
         lignes = [
             ["République de Guinée · Ministère de l'Économie, des Finances et du Budget"],
-            [f"Système intégré de pilotage des finances publiques — {self.titre}"],
+            [f"Tableau de bord des finances publiques — {self.titre}"],
             ["Document de travail – diffusion restreinte"],
             [],
             ["Exercice", m.get("exercice")],
@@ -376,8 +455,51 @@ def _contenu(page: str, request, c: Classeur) -> None:
             ligne = {k: v for k, v in x.items() if k != "meta"}
             if x["code"] == "dette" and "reference" in ligne:  # la référence de la dette est un ratio (seuil CEDEAO)
                 ligne["seuil"] = ligne.pop("reference")
-            indicateurs.append(ligne | {"source": x["meta"]["application"], "statut": x["meta"]["statut_source"]})
+            indicateurs.append(
+                ligne
+                | {
+                    "source": x["meta"]["application"],
+                    "statut": x["meta"]["statut_source"],
+                    "date_situation": x["meta"]["date_situation"],
+                    "exercice": x["meta"].get("exercice"),
+                }
+            )
+        c.feuille(
+            "Mode de lecture",
+            {
+                "mode": d.get("mode_synthese"),
+                "precaution": (
+                    "Les montants absents ne sont pas des zéros confirmés. "
+                    "Aucun solde budgétaire n'est déduit des graphiques."
+                ),
+            },
+        )
         c.feuille("Indicateurs", indicateurs)
+        execution = d.get("execution")
+        if execution:
+            i, n1 = execution["indicateurs"], execution.get("comparaison_n1") or {}
+            c.feuille(
+                "Exécution",
+                {
+                    "credits_actuels": i["credit_actuel"],
+                    "engage": i["credit_engage"],
+                    "liquide": i["montant_liquide"],
+                    "ordonnance": i["montant_ordonnance"],
+                    "paye": i["montant_paye"],
+                    "reste_a_payer": i["paiement"]["reste_a_payer"],
+                    "taux_engagement": i["taux_engagement"],
+                    "taux_liquidation": i["taux_liquidation"],
+                    "taux_ordonnancement": i["taux_ordonnancement"],
+                    "taux_vbp": i["taux_vbp"],
+                    "taux_paiement": i["taux_paiement"],
+                    "taux_engagement_n1_meme_date": n1.get("taux_engagement"),
+                    "date_n1": n1.get("date"),
+                    "methode_n1": n1.get("methode") or n1.get("motif"),
+                },
+            )
+        if d.get("plan_engagement"):
+            c.feuille("Plan d'engagement", d["plan_engagement"])
+        c.feuille("Rapprochement mensuel", d.get("rapprochement_mensuel"))
         c.feuille(
             "Alertes",
             [
@@ -385,14 +507,8 @@ def _contenu(page: str, request, c: Classeur) -> None:
                 for a in d.get("alertes", [])
             ],
         )
-        c.feuille("Série mensuelle", d.get("serie_mensuelle"))
-        c.feuille(
-            "Sources",
-            [
-                {k: s[k] for k in ("application", "structure", "statut", "derniere_date_situation")}
-                for s in d.get("sources", [])
-            ],
-        )
+        c.feuille("Alertes par gravité", d.get("alertes_compte") or {})
+        c.feuille("Cohortes et encaissements", d.get("serie_mensuelle"))
         return
     if page in ("depenses", "investissements"):
         from apps.depense import services as dep
@@ -401,8 +517,17 @@ def _contenu(page: str, request, c: Classeur) -> None:
         if f.date_situation is None:
             return
         if page == "depenses":
+            from apps.depense.pilotage import page as pilotage_depense
+
             c.feuille("Indicateurs", dep.indicateurs(f))
-            c.feuille("Chaîne de la dépense", dep.chaine(f)["phases"])
+            pilotage = pilotage_depense(f)
+            c.feuille("Délais de visa", pilotage["delais"])
+            c.feuille("Rapprochement des phases", pilotage["rapprochements"])
+            c.feuille(
+                "APAD enregistrées", {k: v for k, v in pilotage["apad"].items() if k not in {"ministeres", "dossiers"}}
+            )
+            c.feuille("APAD par ministère", pilotage["apad"]["ministeres"])
+            c.feuille("Régies enregistrées", pilotage["regies"])
             c.feuille("Natures", [{k: v for k, v in n.items() if k != "empile"} for n in dep.natures(f)])
             c.feuille(
                 "Ministères",
@@ -411,10 +536,20 @@ def _contenu(page: str, request, c: Classeur) -> None:
                     for s in dep.sections(f)
                 ],
             )
-            c.feuille("Rythme mensuel", dep.mensuel(f)["mois"])
+            mensuel = dep.mensuel(f)
+            c.feuille("Cohortes mensuelles", mensuel["mois"])
+            c.feuille("Rapprochement mensuel", mensuel["rapprochement"])
+            c.feuille(
+                "Méthode des soldes",
+                {
+                    "precision": (
+                        "Ordonnancé non payé à rapprocher avec le Trésor. "
+                        "L'âge est mesuré depuis la création de l'engagement ; "
+                        "il ne certifie ni l'exigibilité ni des arriérés."
+                    )
+                },
+            )
             c.feuille("Restes à payer", dep.restes_a_payer_anciennete(f)["mois"])
-            c.feuille("Procédures", dep.procedures(f))
-            c.feuille("Bénéficiaires (top 50)", dep.beneficiaires(f, top=50)["beneficiaires"])
         else:
             s = dep.synthese_investissement(f)
             c.feuille("Indicateurs", {k: v for k, v in s.items() if not isinstance(v, list)})
@@ -442,6 +577,14 @@ def _contenu(page: str, request, c: Classeur) -> None:
     if f.date_situation is None:
         return
     d = import_module(MODULES[page]).page(f)
+    if page == "tofe":
+        c.feuille("Tableau TOFE", d["lignes"])
+        c.feuille("Indicateurs", d["indicateurs"])
+        c.feuille("Série mensuelle", d["mensuel"])
+        c.feuille("Contrôles", d["verifications"])
+        c.feuille("Méthode", {"description": d["methode"], "perimetre": d["perimetre"]})
+        c.feuille("Références", d["references"])
+        return
     for cle, v in d.items():
         if isinstance(v, dict) and "meta" in v and "donnees" in v:  # bloc à source propre
             c.feuille(
@@ -485,7 +628,7 @@ class ExportView(APIView):
         u = request.user
         if not (u.voit_tout() or u.peut_exporter(domaine)) or (domaine == Domaine.SYNTHESE and u.role == "lecteur"):
             raise PermissionDenied("Votre profil ne permet pas l'export de cette page.")
-        f = resoudre_filtres(request.query_params, source) if page != "synthese" else None
+        f = resoudre_filtres(request.query_params, source)
         p = request.query_params
         filtres = " · ".join(
             filter(

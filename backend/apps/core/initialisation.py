@@ -15,6 +15,16 @@ from .models import Domaine, Parametre, Source, StatutSource, TypeConnecteur
 FIXTURES = Path(settings.BASE_DIR) / "fixtures" / "referentiels"
 
 SOURCES = [
+    (
+        "tofe",
+        Domaine.TOFE,
+        "TOFE — scénario d'illustration",
+        "Cadre TOFE guinéen · démonstration",
+        StatutSource.NON_RACCORDE,
+        TypeConnecteur.AUCUN,
+        None,
+        "Scénario fictif autonome, sans consolidation des sources réelles",
+    ),
     # code, domaine, application, structure, statut, connecteur, en production depuis, remarque
     (
         "chaine_depense",
@@ -25,6 +35,17 @@ SOURCES = [
         TypeConnecteur.EXCEL_CHAINE_DEPENSE,
         None,
         "Extraction Excel (lot 1)",
+    ),
+    (
+        # Page Pilotage : la permission est celle du domaine Pilotage (code « tofe »).
+        "plan_engagement",
+        Domaine.TOFE,
+        "Chaîne Dépense — plan d'engagement (Oracle)",
+        "DGB / DNB",
+        StatutSource.NON_RACCORDE,
+        TypeConnecteur.AUCUN,
+        None,
+        "GDEP.TD_PLAN_ENG* en lecture seule : commande import_plan_engagement",
     ),
     (
         "safig",
@@ -59,7 +80,7 @@ SOURCES = [
     (
         "dette",
         Domaine.DETTE,
-        "Application de la dette (nom à confirmer)",
+        "SIGAD",
         "Direction de la dette",
         StatutSource.NON_RACCORDE,
         TypeConnecteur.EXCEL_GENERIQUE,
@@ -183,7 +204,10 @@ def charger_referentiels() -> None:
     for c in nomenclature["regulations"]:
         RefRegulation.objects.get_or_create(code=c)
     for tb in nomenclature["types_budget"]:
-        RefTypeBudget.objects.get_or_create(code=tb["code"], defaults={"libelle": tb["libelle"]})
+        objet, _ = RefTypeBudget.objects.get_or_create(code=tb["code"], defaults={"libelle": tb["libelle"]})
+        if not objet.libelle and tb["libelle"]:  # libellé laissé vide par une initialisation antérieure
+            objet.libelle = tb["libelle"]
+            objet.save(update_fields=["libelle"])
 
     sections = json.loads((FIXTURES / "sections.json").read_text(encoding="utf-8"))["sections"]
     for s in sections:
@@ -221,6 +245,7 @@ def initialiser_dimensions() -> None:
 
 def initialiser_tout() -> None:
     initialiser_sources()
+    initialiser_flux()
     initialiser_parametres()
     charger_referentiels()
     initialiser_dimensions()
@@ -233,6 +258,68 @@ def initialiser_tout() -> None:
 
     preparer_dossiers()
     planifier_releve_depots()
+
+
+@transaction.atomic
+def initialiser_flux() -> None:
+    """Installe le pilote sans activer de collecte ni modifier un flux déjà configuré."""
+    from django.utils import timezone
+    from django_celery_beat.models import PeriodicTask
+
+    from .models import Chargement, FluxETL
+
+    source = Source.objects.get(code="sysop")
+    exercice = (
+        Chargement.objects.filter(source=source, statut="succes", exercice__isnull=False)
+        .exclude(detail__contains={"demo": True})
+        .values_list("exercice", flat=True)
+        .first()
+    )
+    _, cree = FluxETL.objects.get_or_create(
+        code="sysop-portefeuille",
+        defaults={
+            "nom": "SYSOP · Portefeuille de l'État",
+            "source": source,
+            "profil": "sysop_portefeuille",
+            "exercice": exercice or timezone.localdate().year,
+        },
+    )
+    if cree:
+        # L'ancien job ne fixait pas l'exercice. Le pilote reste manuel par défaut.
+        source.planification_cron = ""
+        source.save(update_fields=["planification_cron"])
+        PeriodicTask.objects.filter(name="chargement-sysop").delete()
+
+    source = Source.objects.get(code="chaine_depense")
+    exercice = (
+        Chargement.objects.filter(source=source, statut="succes", fichier="oracle://chaine_depense")
+        .values_list("exercice", flat=True)
+        .first()
+    )
+    _, cree = FluxETL.objects.get_or_create(
+        code="oracle-chaine-depense",
+        defaults={
+            "nom": "Oracle · Chaîne Dépense",
+            "source": source,
+            "profil": "oracle_chaine_depense",
+            "exercice": exercice or timezone.localdate().year,
+        },
+    )
+    if cree:
+        source.planification_cron = ""
+        source.save(update_fields=["planification_cron"])
+        PeriodicTask.objects.filter(name="chargement-chaine_depense").delete()
+
+
+def requetes_oracle_preparees() -> dict[str, str]:
+    """Correspondances SQL existantes, sans modifier les requêtes déjà configurées."""
+    import sqlparse
+
+    dossier = Path(settings.BASE_DIR) / "etl" / "sql" / "chaine_depense"
+    return {
+        nom: sqlparse.format((dossier / f"{nom}.sql").read_text(encoding="utf-8"), strip_comments=True).strip()
+        for nom in ("situation", "engagements")
+    }
 
 
 # ---------------------------------------------------------------- Telemo (flux F3, F4, F5)

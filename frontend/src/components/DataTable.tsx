@@ -7,6 +7,7 @@ import {
   useReactTable,
   type ColumnDef,
   type SortingState,
+  type VisibilityState,
 } from "@tanstack/react-table";
 import { ArrowDown, ArrowUp, ChevronsUpDown, Download, Search } from "lucide-react";
 import { useState } from "react";
@@ -35,6 +36,7 @@ export function DataTable<T>({
   nomExport,
   triInitial = [],
   vide = "Aucune ligne ne correspond.",
+  visibilite,
 }: {
   donnees: T[];
   colonnes: Colonne<T>[];
@@ -46,6 +48,8 @@ export function DataTable<T>({
   triInitial?: SortingState;
   /** Message affiché quand le tableau est vide. */
   vide?: string;
+  /** Colonnes masquées par l'utilisateur ({ id: false }) ; les autres restent affichées. */
+  visibilite?: VisibilityState;
 }) {
   const [tri, setTri] = useState<SortingState>(triInitial);
   const [filtre, setFiltre] = useState("");
@@ -53,7 +57,7 @@ export function DataTable<T>({
   const table = useReactTable({
     data: donnees,
     columns: colonnes,
-    state: { sorting: tri, globalFilter: filtre },
+    state: { sorting: tri, globalFilter: filtre, columnVisibility: visibilite ?? {} },
     onSortingChange: setTri,
     onGlobalFilterChange: setFiltre,
     getCoreRowModel: getCoreRowModel(),
@@ -206,7 +210,10 @@ export function DataTable<T>({
             })}
             {lignes.length === 0 && (
               <tr>
-                <td colSpan={colonnes.length} className="px-3 py-6 text-center text-ink-2">
+                <td
+                  colSpan={table.getVisibleLeafColumns().length}
+                  className="px-3 py-6 text-center text-ink-2"
+                >
                   {vide}
                 </td>
               </tr>

@@ -15,7 +15,7 @@ import pandas as pd
 from django.conf import settings
 
 from apps.core import regles
-from apps.depense.models import FaitEngagement, FaitOperation, FaitRegie, FaitSituationLigne
+from apps.depense.models import FaitAPAD, FaitEngagement, FaitOperation, FaitRegie, FaitSituationLigne
 from apps.referentiels.models import (
     TITRES,
     RefBailleur,
@@ -45,12 +45,14 @@ ONGLET_SITUATION = "situation"
 ONGLET_ENGAGEMENTS = "engagements"
 ONGLET_OPERATIONS = "operations"
 ONGLET_REGIE = "regie"
+ONGLET_APAD = "apad"
 
 NOMS_ONGLETS = {
     ONGLET_SITUATION: ["situation courante"],
     ONGLET_ENGAGEMENTS: ["liste des engagements"],
     ONGLET_OPERATIONS: ["details des operations", "detail des operations"],
     ONGLET_REGIE: ["regie", "regies"],
+    ONGLET_APAD: ["apad"],
 }
 
 IMPUTATION = {
@@ -68,6 +70,17 @@ IMPUTATION = {
 }
 
 COLONNES = {
+    ONGLET_APAD: {
+        **IMPUTATION,
+        "exercice": ["exercice"],
+        "gestionnaire": ["gradm"],
+        "numero_apad": ["numero apad"],
+        "numero_marche": ["numero marche"],
+        "libelle_sous_section": ["libelle sous section"],
+        "nature_flux": ["nature flux"],
+        "avance_demarrage": ["avance de demarrage"],
+        "date_creation": ["date creation"],
+    },
     ONGLET_SITUATION: {
         **IMPUTATION,
         "libelle_section": ["libelle section"],
@@ -281,10 +294,15 @@ class ChaineDepenseMixin:
     """Validation et chargement communs aux connecteurs Excel et Oracle."""
 
     source_code = "chaine_depense"
+    cle_ligne = CLE_LIGNE
+    niveau_concordance = "bloquant"
 
     # ----------------------------------------------------------------- validation
 
     def validate(self) -> RapportValidation:
+        self.informations_chargement["colonnes_extraites"] = {
+            onglet: [str(c) for c in df.columns] for onglet, df in self.donnees.items()
+        }
         rapport = RapportValidation()
         sc = self.donnees.get(ONGLET_SITUATION)
         eng = self.donnees.get(ONGLET_ENGAGEMENTS)
@@ -328,26 +346,37 @@ class ChaineDepenseMixin:
                 detail={"message": "date de situation introuvable, à saisir à l'import"},
             )
 
+        apad = self.donnees.get(ONGLET_APAD)
+        if apad is not None:
+            try:
+                self.preparer_apad(apad)
+            except (ValueError, KeyError) as exc:
+                rapport.ajouter(
+                    "structure_apad", "Structure et valeurs APAD", "bloquant", False, detail={"message": str(exc)}
+                )
+
         # Concordance bloquante : total engagé « Situation courante » = « Liste des engagements ».
         total_sc = sum((n.montant_ou_zero(v) for v in sc["credit_engage"]), Decimal(0))
-        total_eng = sum((n.montant_ou_zero(v) for v in eng["montant_engage"]), Decimal(0))
+        eng_comparables = getattr(self, "_engagements_concordance", eng)
+        total_eng = sum((n.montant_ou_zero(v) for v in eng_comparables["montant_engage"]), Decimal(0))
         ok = regles.concordance_ok(total_sc, total_eng)
         rapport.ajouter(
             "concordance_engage",
             "Concordance du total engagé entre onglets",
-            "bloquant",
+            self.niveau_concordance,
             ok,
             valeur=total_sc - total_eng,
             detail={
                 "situation_courante": str(total_sc),
                 "liste_engagements": str(total_eng),
+                "perimetre": getattr(self, "_perimetre_concordance", "Tous les engagements reçus"),
                 "tolerance_gnf_par_million": regles.parametre("concordance_tolerance_par_million"),
                 "message": f"écart de {total_sc - total_eng:,.0f} GNF".replace(",", " "),
             },
         )
 
         # Contrôles non bloquants.
-        cles = sc[CLE_LIGNE].apply(lambda r: _hash(n.code(v) for v in r), axis=1)
+        cles = sc[self.cle_ligne].apply(lambda r: _hash(n.code(v) for v in r), axis=1)
         doublons = int(cles.duplicated(keep=False).sum())
         rapport.ajouter(
             "doublons_cle_ligne",
@@ -426,7 +455,49 @@ class ChaineDepenseMixin:
             total += self._charger_engagements(chargement, ONGLET_OPERATIONS, FaitOperation)
         if ONGLET_REGIE in self.donnees:
             total += self._charger_regie(chargement)
+        if ONGLET_APAD in self.donnees:
+            total += self.charger_apad(chargement)
         return total
+
+    def preparer_apad(self, df):
+        requis = ["exercice", "section", "sous_section", "titre", "gestionnaire", "numero_apad", "avance_demarrage"]
+        if any(c not in df.columns for c in requis):
+            raise ValueError("Colonnes APAD incomplètes.")
+        lignes = []
+        for index, r in df.iterrows():
+            if not n.code(r.get("section")) or not n.code(r.get("numero_apad")):
+                raise ValueError("Section ou numéro APAD absent.")
+            if n.code(r.get("exercice")) != str(self.exercice):
+                raise ValueError("Exercice APAD différent de l'exercice importé.")
+            montant, absent = n.montant(r.get("avance_demarrage"))
+            if montant < 0:
+                raise ValueError("Montant APAD négatif à rapprocher avant import.")
+            creation = n.date_(r.get("date_creation"))
+            if creation and self.date_situation and creation > self.date_situation:
+                raise ValueError("Date APAD postérieure à la situation.")
+            lignes.append(
+                {
+                    **self._imputation(r),
+                    "gestionnaire": n.code(r.get("gestionnaire")),
+                    "numero_apad": n.code(r.get("numero_apad")),
+                    "numero_marche": n.code(r.get("numero_marche")),
+                    "libelle_projet": n.libelle(r.get("libelle_sous_section")),
+                    "nature_flux": n.code(r.get("nature_flux")),
+                    "avance_demarrage": montant,
+                    "montant_absent": absent,
+                    "date_creation": creation,
+                    "ligne_source": int(index) + 2,
+                }
+            )
+        return lignes
+
+    def charger_apad(self, chargement):
+        lignes = self.preparer_apad(self.donnees[ONGLET_APAD])
+        FaitAPAD.objects.bulk_create(
+            [FaitAPAD(**self._technique(chargement), **r) for r in lignes], batch_size=TAILLE_LOT
+        )
+        self.comptes[ONGLET_APAD] = {"lues": len(lignes), "chargees": len(lignes), "rejetees": 0}
+        return len(lignes)
 
     def _charger_referentiels(self) -> None:
         sc = self.donnees[ONGLET_SITUATION]
@@ -542,11 +613,13 @@ class ChaineDepenseMixin:
                 etats |= set(df["etat_dossier"].map(n.libelle)) - {""}
         for p in procedures:
             RefTypeProcedure.objects.get_or_create(
-                libelle=p, defaults={"paiement_hors_chaine": p in PROCEDURES_HORS_CHAINE}
+                libelle=p,
+                defaults={"paiement_hors_chaine": n.cle_entete(p) in {n.cle_entete(v) for v in PROCEDURES_HORS_CHAINE}},
             )
         for e in etats:
             RefEtatDossier.objects.get_or_create(
-                libelle=e, defaults={"engagement_valide": e in ETATS_ENGAGEMENT_VALIDE}
+                libelle=e,
+                defaults={"engagement_valide": n.cle_entete(e) in {n.cle_entete(v) for v in ETATS_ENGAGEMENT_VALIDE}},
             )
         self._procedures = dict(RefTypeProcedure.objects.values_list("libelle", "id"))
         self._etats = dict(RefEtatDossier.objects.values_list("libelle", "id"))
@@ -632,10 +705,11 @@ class ChaineDepenseMixin:
                     **tech,
                     **self._imputation(r),
                     regulation=n.code(r.get("regulation")),
-                    cle_ligne=_hash(n.code(r.get(k)) for k in CLE_LIGNE),
+                    cle_ligne=_hash(n.code(r.get(k)) for k in self.cle_ligne),
                     lfi_absent=mesures["credit_initial_lfi"][1],
                     lfr_absent=mesures["credit_lfr"][1],
-                    attributs={str(c): n.libelle(r.get(c)) for c in extras if not n.est_vide(r.get(c))},
+                    attributs={str(c): n.libelle(r.get(c)) for c in extras if not n.est_vide(r.get(c))}
+                    | {"_mesures_absentes": [m for m, (_, absent) in mesures.items() if absent]},
                     **{m: v[0] for m, v in mesures.items()},
                 )
             )
@@ -665,6 +739,7 @@ class ChaineDepenseMixin:
                 **{m: n.montant_ou_zero(r.get(m)) for m in mesures},
             )
             if modele is FaitEngagement:
+                extras = [c for c in df.columns if c not in COLONNES[onglet] and not str(c).startswith("_")]
                 obj = FaitEngagement(
                     **commun,
                     numero=n.code(r.get("numero")),
@@ -675,6 +750,7 @@ class ChaineDepenseMixin:
                     date_visa_ministre=n.date_(r.get("date_visa_ministre")),
                     date_etat=n.date_(r.get("date_etat")),
                     date_maj=n.date_(r.get("date_maj")),
+                    attributs={str(c): n.libelle(r.get(c)) for c in extras if not n.est_vide(r.get(c))},
                 )
             else:
                 obj = FaitOperation(
@@ -740,6 +816,11 @@ class ExcelChaineDepenseConnector(ChaineDepenseMixin, BaseConnector):
                 df = classeur.parse(feuille, dtype=object)
                 df = df.dropna(how="all")
                 df, inconnues = _renommer(df, onglet)
+                # Certains anciens exports comportent une feuille APAD vide et tronquée.
+                # Elle ne prouve pas un montant nul et ne doit pas bloquer les dépenses.
+                if onglet == ONGLET_APAD and df.empty and "avance_demarrage" not in df.columns:
+                    ignores.append(feuille)
+                    continue
                 if onglet != ONGLET_SITUATION:
                     df = df.drop(columns=inconnues)
                 donnees[onglet] = df
@@ -764,6 +845,33 @@ def _exercice_colonne(donnees: dict[str, pd.DataFrame]) -> Optional[int]:
     return None
 
 
+def libelles_oracle(donnees: dict[str, pd.DataFrame]) -> dict:
+    """Libellés de la situation importée : aucun renommage local ni mélange d'exercices."""
+    sections, sous_sections = {}, {}
+    for df in donnees.values():
+        if "libelle_section" not in df.columns:
+            continue
+        champs = [
+            c
+            for c in ("section", "libelle_section", "libelle_court_section", "sous_section", "libelle_sous_section")
+            if c in df.columns
+        ]
+        for r in df[champs].drop_duplicates().to_dict("records"):
+            code = n.code(r.get("section"))
+            if not code:
+                continue
+            nom = n.libelle(r.get("libelle_section")) or f"Section {code}"
+            sections[code] = {
+                "libelle": nom,
+                "libelle_court": n.libelle(r.get("libelle_court_section")) or nom,
+                "type": n.type_section(code, nom),
+            }
+            sous = n.code(r.get("sous_section"))
+            if sous:
+                sous_sections.setdefault(code, {})[sous] = n.libelle(r.get("libelle_sous_section")) or sous
+    return {"sections": sections, "sous_sections": sous_sections}
+
+
 class OracleChaineDepenseConnector(ChaineDepenseMixin, BaseConnector):
     """Lecture seule de la Chaîne Dépense sur une réplique ou des vues dédiées.
 
@@ -773,17 +881,60 @@ class OracleChaineDepenseConnector(ChaineDepenseMixin, BaseConnector):
     """
 
     HEURES_OUVREES = (dtime(7, 30), dtime(18, 30))
+    cle_ligne = [
+        "exercice",
+        "section",
+        "programme",
+        "sous_section",
+        "nature_flux",
+        "titre",
+        "chapitre",
+        "article",
+        "paragraphe",
+        "sous_paragraphe",
+        "source_financement",
+        "groupe_bailleur",
+        "bailleur",
+        "type_budget",
+    ]
 
-    def __init__(self, configuration: Optional[dict] = None, maintenant: Optional[datetime] = None, **kwargs):
+    def __init__(
+        self,
+        configuration: Optional[dict] = None,
+        maintenant: Optional[datetime] = None,
+        exception_ponctuelle: bool = False,
+        accepter_ecart_test: bool = False,
+        **kwargs,
+    ):
         super().__init__(**kwargs)
         self.configuration = configuration or {}
         self.maintenant = maintenant
+        self.exception_ponctuelle = exception_ponctuelle
+        self.niveau_concordance = "avertissement" if accepter_ecart_test else "bloquant"
+        self.informations_chargement = {
+            "exception_horaire_ponctuelle": exception_ponctuelle,
+            "test_non_reconcilie": accepter_ecart_test,
+        }
 
     @property
     def nom_fichier(self) -> str:
         return "oracle://chaine_depense"
 
+    @classmethod
+    def programmation_en_heures_ouvrees(cls, expression: str) -> bool:
+        """Vrai si l'expression cron déclenche au moins une exécution en semaine aux heures ouvrées."""
+        from etl.planificateur import analyser
+
+        c = analyser(expression)
+        debut, fin = cls.HEURES_OUVREES
+        # Jours de semaine cron : 1 = lundi … 5 = vendredi.
+        return bool(c.day_of_week & {1, 2, 3, 4, 5}) and any(
+            debut <= dtime(h, m) <= fin for h in c.hour for m in c.minute
+        )
+
     def verifier_creneau(self) -> None:
+        if not settings.ORACLE_RESTRICTION_HEURES_OUVREES or self.exception_ponctuelle:
+            return
         if self.configuration.get("replique", False):
             return
         tz = ZoneInfo(settings.TIME_ZONE)
@@ -796,19 +947,87 @@ class OracleChaineDepenseConnector(ChaineDepenseMixin, BaseConnector):
             )
 
     def extract(self) -> dict[str, pd.DataFrame]:
-        import oracledb
+        from .oracle import connexion_lecture_seule
 
         self.verifier_creneau()
         conf = settings.SOURCES_EXTERNES["chaine_depense_oracle"]
         if not conf["dsn"]:
             raise ErreurChargement("Connexion Oracle non configurée (CHAINE_DEPENSE_ORACLE_DSN).")
         requetes = self.configuration.get("requetes", {})
+        if not self.exercice:
+            raise ErreurChargement("Un exercice explicite est requis pour l'extraction Oracle.")
+        if not {ONGLET_SITUATION, ONGLET_ENGAGEMENTS}.issubset(requetes):
+            raise ErreurChargement("Requêtes Oracle situation et engagements requises.")
         donnees = {}
-        with oracledb.connect(user=conf["user"], password=conf["password"], dsn=conf["dsn"]) as cnx:
+        with connexion_lecture_seule() as cnx:
             for onglet, sql in requetes.items():
-                df = pd.read_sql(sql, cnx, params={"exercice": self.exercice} if ":exercice" in sql else None)
+                with cnx.cursor() as cursor:
+                    cursor.arraysize = 1000
+                    cursor.execute(sql, exercice=self.exercice)
+                    df = pd.DataFrame(cursor.fetchall(), columns=[c[0] for c in cursor.description], dtype=object)
                 df, _ = _renommer(df.astype(object), onglet)
                 donnees[onglet] = df
+        self.informations_chargement["indicateurs_indisponibles"] = (
+            [] if "credit_disponible" in donnees[ONGLET_SITUATION].columns else ["credit_disponible"]
+        )
+        self.informations_chargement["referentiels_libelles"] = libelles_oracle(donnees)
         if self.date_situation is None:
             self.date_situation = date.today()
         return donnees
+
+    def validate(self) -> RapportValidation:
+        # Une validation répétée ne doit pas réutiliser le périmètre d'une extraction précédente.
+        self.__dict__.pop("_engagements_concordance", None)
+        self.__dict__.pop("_perimetre_concordance", None)
+        self.informations_chargement.pop("rapprochement_engage", None)
+        for onglet, champs in (
+            (ONGLET_SITUATION, self.cle_ligne),
+            (ONGLET_ENGAGEMENTS, ["exercice", "groupe_administratif", "numero"]),
+        ):
+            df = self.donnees.get(onglet)
+            if df is None or any(c not in df.columns for c in champs):
+                raise ErreurChargement(f"Clé source Oracle incomplète pour {onglet}.")
+            if df.empty:
+                raise ErreurChargement(f"Aucune donnée Oracle pour {onglet} et l'exercice demandé.")
+            if df[champs].isna().any().any() or df[champs].duplicated().any():
+                raise ErreurChargement(f"Clé source Oracle nulle ou dupliquée pour {onglet}.")
+        sc = self.donnees[ONGLET_SITUATION]
+        eng = self.donnees[ONGLET_ENGAGEMENTS]
+        rapprochement = None
+        if {"code_etat_dossier", "code_type_procedure"}.issubset(eng.columns):
+            # Périmètre constaté dans l'analyse LBUDG/ENGAGEMENT 2025. Il n'est accepté
+            # pour une extraction que si l'égalité est vérifiée sur CHAQUE clé complète.
+            comparables = eng.loc[
+                (eng["code_etat_dossier"].map(n.code) != "E9N") & (eng["code_type_procedure"].map(n.code) != "52")
+            ]
+
+            def totaux_par_cle(df, mesure):
+                totaux = {}
+                for row in df[self.cle_ligne + [mesure]].itertuples(index=False, name=None):
+                    cle = tuple(n.code(v) for v in row[:-1])
+                    totaux[cle] = totaux.get(cle, Decimal(0)) + n.montant_ou_zero(row[-1])
+                return totaux
+
+            budget = totaux_par_cle(sc, "credit_engage")
+            engagements = totaux_par_cle(comparables, "montant_engage")
+            ecarts = sum(budget.get(k, 0) != engagements.get(k, 0) for k in budget.keys() | engagements.keys())
+            rapprochement = {"cles_en_ecart": ecarts, "lignes_ecartees_du_controle": len(eng) - len(comparables)}
+            if not ecarts:
+                self._engagements_concordance = comparables
+                self._perimetre_concordance = "Hors dossiers abandonnés E9N et procédure 52 (Dégagement)"
+                self.informations_chargement["rapprochement_engage"] = {
+                    **rapprochement,
+                    "perimetre": self._perimetre_concordance,
+                    "donnees_source_conservees": True,
+                }
+        rapport = super().validate()
+        if rapprochement is not None:
+            rapport.ajouter(
+                "concordance_engage_par_cle",
+                "Rapprochement Oracle sur chaque clé budgétaire complète",
+                self.niveau_concordance,
+                rapprochement["cles_en_ecart"] == 0,
+                nombre=rapprochement["cles_en_ecart"],
+                detail=rapprochement,
+            )
+        return rapport

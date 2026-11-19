@@ -23,7 +23,7 @@ def chargements_actifs(source_code: str, f: Filtres) -> list[int]:
 
 
 def filtres_source(source_code: str, exercice: Optional[int] = None) -> Optional[Filtres]:
-    """Dernière situation d'une source (de préférence pour l'exercice demandé)."""
+    """Dernière situation de l'exercice demandé, sans substitution d'un autre exercice."""
     situations = dernieres_situations(source_code)
     if not situations:
         return None
@@ -31,6 +31,7 @@ def filtres_source(source_code: str, exercice: Optional[int] = None) -> Optional
         for e, d in situations:
             if e == exercice:
                 return Filtres(e, d)
+        return None
     e, d = situations[0]
     return Filtres(e, d)
 
@@ -65,3 +66,19 @@ def depense(f_exercice: Optional[int], titre: Optional[str] = None):
 
         fc.nature = next(n for n, t in NATURE_VERS_TITRE.items() if t == titre)
     return fc, services.indicateurs(fc)
+
+
+def projection_recettes(lignes: list[dict], f: Filtres) -> dict:
+    """Recettes projetées au 31 décembre, à partir des lignes mensuelles (mois, objectif, recouvre).
+
+    La cible n'est renseignée que si les objectifs des douze mois sont chargés ; sinon l'objectif annuel
+    n'est pas connu de l'entrepôt.
+    """
+    from datetime import date
+
+    from .projections import projeter
+
+    serie = {date(f.exercice, int(x["mois"]), 1): x["recouvre"] for x in lignes}
+    annuel = len({int(x["mois"]) for x in lignes if x["objectif"]}) == 12
+    cible = sum(x["objectif"] for x in lignes) if annuel else None
+    return projeter(serie, f.date_situation, cible=cible, exercice=f.exercice)

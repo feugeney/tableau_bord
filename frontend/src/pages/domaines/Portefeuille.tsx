@@ -3,11 +3,12 @@ import { HBarList } from "@/components/Barres";
 import { DataTable } from "@/components/DataTable";
 import { BandeauKpi, KpiCard, StatusPill, type Etat } from "@/components/Indicateurs";
 import { Montant, Pourcentage } from "@/components/Montant";
+import { SourceBadge } from "@/components/Source";
 import { Carte } from "@/components/ui/primitives";
 import { nombre } from "@/lib/format";
 
 import { EtatPage, TitrePage, Zone } from "../commun";
-import { ContenuPrevu, type Bloc } from "./commun";
+import type { Bloc } from "./commun";
 
 interface Donnees {
   indicateurs: {
@@ -21,12 +22,25 @@ interface Donnees {
     taux_transmission: number | null;
   };
   transferts: Bloc<{ credit_actuel: number; montant_ordonnance: number; montant_paye: number }>;
+  couverture?: {
+    epa_avec_subvention: number;
+    societes_avec_dividende: number;
+    resultats_exploitables: number;
+    organismes_validation_etablie: number;
+    organismes_recenses: number;
+    obligations_dividendes_connues: boolean;
+  };
+  perimetre_transferts?: string;
+  avertissement_periode?: string | null;
   subventions: { libelle: string; prevu: number; paye: number }[];
   dividendes: { libelle: string; vote: number; encaisse: number }[];
   sante: { statut: string; libelle: string; nombre: number }[];
+  precision_sante?: string | null;
+  precision_transmission?: string | null;
   gouvernance: {
     etats_non_transmis: number;
-    mandats_expires: number;
+    mandats_expires: number | null;
+    mandats_disponibles?: boolean;
     organismes_mandats_expires: { libelle: string; mandats_expires: number }[];
   };
 }
@@ -49,9 +63,8 @@ export default function Portefeuille() {
       />
       <EtatPage
         requete={r}
-        vide={<ContenuPrevu cle="portefeuille" />}
         indicateurs={4}
-        precisionDemo="Les transferts de l'État viennent de la Chaîne Dépense (réel)."
+        precisionDemo="Le contexte budgétaire du titre 4 est présenté séparément, avec sa propre source."
       >
         {(d, env) => {
           const i = d.indicateurs;
@@ -60,21 +73,27 @@ export default function Portefeuille() {
               <Zone titre="Indicateurs clés">
                 <BandeauKpi colonnes={4}>
                   <KpiCard
-                    libelle="Organismes suivis"
+                    libelle="Organismes recensés"
                     valeur={<span className="chiffres">{nombre(i.epa + i.societes)}</span>}
                     contexte={`${nombre(i.epa)} EPA et ${nombre(i.societes)} sociétés publiques`}
                     meta={env.meta}
                   />
                   <KpiCard
-                    libelle="Transferts de l'État"
-                    valeur={<Montant gnf={d.transferts.donnees?.montant_ordonnance} />}
+                    libelle="Subventions versées aux EPA renseignés"
+                    valeur={<Montant gnf={i.subventions_payees} />}
                     contexte={
                       <>
-                        Ordonnancés sur <Montant gnf={d.transferts.donnees?.credit_actuel} /> de crédits
-                        (titre 4)
+                        Prévision LFR renseignée : <Montant gnf={i.subventions_prevues} />
+                        {d.couverture && (
+                          <>
+                            {" "}
+                            · {nombre(d.couverture.epa_avec_subvention)} EPA avec une ligne sur{" "}
+                            {nombre(i.epa)} recensés
+                          </>
+                        )}
                       </>
                     }
-                    meta={d.transferts.meta}
+                    meta={env.meta}
                   />
                   <KpiCard
                     libelle="Dividendes encaissés"
@@ -82,56 +101,105 @@ export default function Portefeuille() {
                     contexte={
                       <>
                         <Pourcentage ratio={i.taux_dividendes} /> des <Montant gnf={i.dividendes_votes} />{" "}
-                        votés
+                        attendus renseignés
+                        {d.couverture && (
+                          <> · {nombre(d.couverture.societes_avec_dividende)} société(s) renseignée(s)</>
+                        )}
                       </>
                     }
                     jauge={{ valeur: i.taux_dividendes }}
                     meta={env.meta}
                   />
                   <KpiCard
-                    libelle="États financiers transmis"
+                    libelle={
+                      d.precision_transmission ? "Validation des états SYSOP" : "États financiers transmis"
+                    }
                     valeur={<Pourcentage ratio={i.taux_transmission} />}
-                    contexte={`${nombre(d.gouvernance.etats_non_transmis)} organismes n'ont pas transmis`}
+                    contexte={
+                      d.couverture
+                        ? `${nombre(d.couverture.organismes_validation_etablie)} sur ${nombre(d.couverture.organismes_recenses)} selon les critères actuels`
+                        : `${nombre(d.gouvernance.etats_non_transmis)} sans validation établie`
+                    }
                     jauge={{ valeur: i.taux_transmission }}
                     meta={env.meta}
                   />
                 </BandeauKpi>
+                {d.precision_transmission && (
+                  <p className="mt-3 text-sm text-ink-2">{d.precision_transmission}</p>
+                )}
+                {d.couverture && (
+                  <p className="mt-2 text-sm text-ink-2">
+                    Le référentiel recensé ne représente pas des dossiers financiers complets pour chaque
+                    organisme. Le taux de dividendes couvre uniquement les montants renseignés ; le nombre de
+                    sociétés redevables et les échéances ne sont pas établis.
+                  </p>
+                )}
               </Zone>
 
               <Zone titre="Points d'attention">
                 <div className="grid gap-4 lg:grid-cols-2">
-                  <Carte id="sante" titre="Santé financière des organismes">
+                  <Carte
+                    id="sante"
+                    titre="Couverture des résultats financiers"
+                    sousTitre={d.precision_sante ?? undefined}
+                  >
+                    {d.couverture && (
+                      <p className="mb-3 text-sm text-ink-2">
+                        {nombre(d.couverture.resultats_exploitables)} résultat(s) exploitable(s) sur{" "}
+                        {nombre(d.couverture.organismes_recenses)} organismes recensés.{" "}
+                        {d.couverture.resultats_exploitables === 0 &&
+                          "Aucun diagnostic de santé financière ne peut être établi sur cet import."}
+                      </p>
+                    )}
                     <ul className="flex flex-col gap-2">
-                      {d.sante.map((s) => (
-                        <li key={s.statut} className="flex items-center justify-between gap-3 text-base">
-                          {ETAT_SANTE[s.statut] ? (
-                            <StatusPill etat={ETAT_SANTE[s.statut]!} libelle={s.libelle} />
-                          ) : (
-                            <span className="text-ink">{s.libelle}</span>
-                          )}
-                          <span className="chiffres font-bold text-ink">{nombre(s.nombre)}</span>
-                        </li>
-                      ))}
+                      {d.sante
+                        .filter(
+                          (s) =>
+                            !d.couverture ||
+                            d.couverture.resultats_exploitables > 0 ||
+                            (s.nombre > 0 &&
+                              !["excedentaire", "equilibre", "deficitaire"].includes(s.statut)),
+                        )
+                        .map((s) => (
+                          <li key={s.statut} className="flex items-center justify-between gap-3 text-base">
+                            {ETAT_SANTE[s.statut] ? (
+                              <StatusPill etat={ETAT_SANTE[s.statut]!} libelle={s.libelle} />
+                            ) : (
+                              <span className="text-ink">{s.libelle}</span>
+                            )}
+                            <span className="chiffres font-bold text-ink">{nombre(s.nombre)}</span>
+                          </li>
+                        ))}
                     </ul>
                   </Carte>
                   <Carte
                     id="gouvernance"
                     titre="Gouvernance"
-                    sousTitre={`${nombre(d.gouvernance.mandats_expires)} mandats d'administrateurs expirés`}
+                    sousTitre={
+                      d.gouvernance.mandats_disponibles === false
+                        ? "Mandats d'administrateurs : données non raccordées"
+                        : `${nombre(d.gouvernance.mandats_expires)} mandats d'administrateurs expirés`
+                    }
                   >
-                    <DataTable
-                      donnees={d.gouvernance.organismes_mandats_expires}
-                      recherche={false}
-                      libelle="Organismes aux mandats d'administrateurs expirés"
-                      colonnes={[
-                        { header: "Organisme", accessorKey: "libelle" },
-                        {
-                          header: "Mandats expirés",
-                          accessorKey: "mandats_expires",
-                          meta: { numerique: true },
-                        },
-                      ]}
-                    />
+                    {d.gouvernance.mandats_disponibles === false ? (
+                      <p className="text-sm text-ink-2">
+                        Les dates de fin de mandat ne sont pas encore disponibles dans ce raccordement SYSOP.
+                      </p>
+                    ) : (
+                      <DataTable
+                        donnees={d.gouvernance.organismes_mandats_expires}
+                        recherche={false}
+                        libelle="Organismes aux mandats d'administrateurs expirés"
+                        colonnes={[
+                          { header: "Organisme", accessorKey: "libelle" },
+                          {
+                            header: "Mandats expirés",
+                            accessorKey: "mandats_expires",
+                            meta: { numerique: true },
+                          },
+                        ]}
+                      />
+                    )}
                   </Carte>
                 </div>
               </Zone>
@@ -141,7 +209,7 @@ export default function Portefeuille() {
                   <Carte
                     id="subventions"
                     titre="Subventions aux EPA"
-                    sousTitre="Dix premières · barre : payé · trait : prévu"
+                    sousTitre="Dix premières · barre : versé · trait : prévision LFR renseignée ; aucune échéance n'est évaluée"
                   >
                     <HBarList
                       lignes={d.subventions.map((s) => ({
@@ -150,14 +218,13 @@ export default function Portefeuille() {
                         objectif: s.prevu,
                       }))}
                       reference="du prévu"
-                      retard="paiement en retard"
-                      seuil={0.5}
+                      seuil={null}
                     />
                   </Carte>
                   <Carte
                     id="dividendes"
                     titre="Dividendes"
-                    sousTitre="Dix premiers · barre : encaissé · trait : voté"
+                    sousTitre="Sociétés renseignées · barre : encaissé · trait : attendu ; une échéance est nécessaire pour établir un retard"
                   >
                     <HBarList
                       lignes={d.dividendes.map((x) => ({
@@ -165,12 +232,31 @@ export default function Portefeuille() {
                         valeur: x.encaisse,
                         objectif: x.vote,
                       }))}
-                      reference="du voté"
-                      retard="non versé"
-                      seuil={0.99}
+                      reference="de l'attendu renseigné"
+                      seuil={null}
                     />
                   </Carte>
                 </div>
+              </Zone>
+              <Zone titre="Contexte budgétaire global">
+                <Carte
+                  titre="Transferts budgétaires de l'État · ensemble du titre 4"
+                  sousTitre={
+                    d.perimetre_transferts ??
+                    "Périmètre plus large que le portefeuille SYSOP ; ne pas additionner aux subventions ci-dessus."
+                  }
+                >
+                  <p className="text-base text-ink">
+                    Ordonnancé : <Montant gnf={d.transferts.donnees?.montant_ordonnance} /> · Crédits :{" "}
+                    <Montant gnf={d.transferts.donnees?.credit_actuel} />.
+                  </p>
+                  {d.avertissement_periode && (
+                    <p className="mt-2 text-sm text-ink-2">{d.avertissement_periode}</p>
+                  )}
+                  <div className="mt-2">
+                    <SourceBadge meta={d.transferts.meta} />
+                  </div>
+                </Carte>
               </Zone>
             </div>
           );

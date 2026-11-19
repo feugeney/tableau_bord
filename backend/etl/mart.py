@@ -30,8 +30,14 @@ def rafraichir_vues() -> None:
             cursor.execute(f"REFRESH MATERIALIZED VIEW mart.{vue}")
 
 
-def version_donnees() -> int:
-    return cache.get_or_set(CLE_VERSION, 1, None)
+def version_donnees() -> str:
+    # Le marqueur en base rend les imports d'un autre processus visibles même sans Redis.
+    from django.db.models import Count, Max
+
+    from apps.core.models import Chargement
+
+    etat = Chargement.objects.filter(statut="succes").aggregate(dernier=Max("id"), nombre=Count("id"))
+    return f"{cache.get_or_set(CLE_VERSION, 1, None)}:{etat['dernier']}:{etat['nombre']}"
 
 
 def invalider_cache_api() -> None:

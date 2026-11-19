@@ -7,6 +7,9 @@ import { cn } from "@/lib/utils";
 import { TitrePage } from "../commun";
 
 const Sources = lazy(() => import("./Sources"));
+const EtatSources = lazy(() => import("./EtatSources"));
+const Alimentation = lazy(() => import("./Alimentation"));
+const FluxETL = lazy(() => import("./FluxETL"));
 const Chargements = lazy(() => import("./Chargements"));
 const Mappings = lazy(() => import("./Mappings"));
 const Utilisateurs = lazy(() => import("./Utilisateurs"));
@@ -17,10 +20,14 @@ const Entrepot = lazy(() => import("./Entrepot"));
 const Journal = lazy(() => import("./Journal"));
 
 const RUBRIQUES = [
-  { chemin: "sources", libelle: "Sources et connecteurs", element: <Sources /> },
-  { chemin: "chargements", libelle: "Imports et chargements", element: <Chargements /> },
+  { chemin: "vue-ensemble", libelle: "Vue d'ensemble", element: <Alimentation /> },
+  { chemin: "etat-sources", libelle: "État des sources", element: <EtatSources /> },
+  { chemin: "sources", libelle: "Connexions aux sources", element: <Sources /> },
+  { chemin: "flux-etl", libelle: "Flux ETL", element: <FluxETL /> },
+  { chemin: "chargements", libelle: "Exécutions et qualité", element: <Chargements /> },
   { chemin: "mappings", libelle: "Mappings de colonnes", element: <Mappings /> },
-  { chemin: "entrepot", libelle: "Entrepôt et illustration", element: <Entrepot /> },
+  { chemin: "donnees", libelle: "Base centrale", element: <Entrepot /> },
+  { chemin: "donnees-test", libelle: "Données de test", element: <Entrepot tests /> },
   { chemin: "utilisateurs", libelle: "Utilisateurs et accès", element: <Utilisateurs /> },
   { chemin: "partages", libelle: "Partage de données (API)", element: <Partages /> },
   { chemin: "regles", libelle: "Règles d'alerte", element: <Regles /> },
@@ -28,7 +35,7 @@ const RUBRIQUES = [
   { chemin: "journal", libelle: "Journal d'audit", element: <Journal /> },
 ];
 
-/** Administration technique de l'entrepôt (rôle DNSI, double authentification). */
+/** Administration des connexions, de l'alimentation et des accès. */
 export default function Administration() {
   const { pathname } = useLocation();
   const liste = useRef<HTMLUListElement>(null);
@@ -41,7 +48,7 @@ export default function Administration() {
   return (
     <>
       <TitrePage
-        titre="Administration de l'entrepôt"
+        titre="Administration du tableau de bord"
         sousTitre="Réservé aux administrateurs DNSI · toutes les actions sont journalisées"
       />
       <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
@@ -72,7 +79,8 @@ export default function Administration() {
         <div className="min-w-0">
           <Suspense fallback={<Squelette className="h-64 w-full" />}>
             <Routes>
-              <Route index element={<Navigate to="sources" replace />} />
+              <Route index element={<Navigate to="vue-ensemble" replace />} />
+              <Route path="entrepot" element={<Navigate to="../donnees" replace />} />
               {RUBRIQUES.map((r) => (
                 <Route key={r.chemin} path={r.chemin} element={r.element} />
               ))}

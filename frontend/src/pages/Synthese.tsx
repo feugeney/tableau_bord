@@ -1,20 +1,35 @@
 import { useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { useDonnees } from "@/api/hooks";
-import type { KpiSynthese, Source, Synthese as TSynthese } from "@/api/types";
+import type { ComparaisonN1, KpiSynthese, Synthese as TSynthese } from "@/api/types";
 import { ListeAlertes } from "@/components/Alertes";
-import { DataTable, type Colonne } from "@/components/DataTable";
 import { GroupedBarChart } from "@/components/GroupedBarChart";
-import { BandeauKpi, KpiCard, StatusPill } from "@/components/Indicateurs";
+import { BandeauKpi, KpiCard, Note, StatusPill } from "@/components/Indicateurs";
 import { Montant, Pourcentage } from "@/components/Montant";
 import { SourceBadge } from "@/components/Source";
-import { Carte } from "@/components/ui/primitives";
-import { dateFr, dateHeureFr, enMds, moisCourt, nombre, pct } from "@/lib/format";
+import { Carte, Segment } from "@/components/ui/primitives";
+import { useAuth } from "@/hooks/useAuth";
+import { useFiltres } from "@/hooks/useFiltres";
+import { dateFr, enMds, moisCourt, nombre, pct } from "@/lib/format";
+import { nomSource } from "@/lib/sources";
 
-import { EtatPage, TitrePage } from "./commun";
+import { EtatPage, TitrePage, Zone } from "./commun";
+import { CourbeExecution, EcartN1 } from "./depenses/analyses";
+import { IndicateursExecution } from "./depenses/IndicateursExecution";
+import { BlocProjectionDepenses } from "./depenses/Projection";
+
+/**
+ * Synthèse (révisée le 19/11/2026) : bandes Trésorerie → Recettes → Exécution → Dette, sources et dates
+ * dans un bandeau unique, blocs sans donnée regroupés sur une ligne, tendance et « où agir ».
+ */
 
 const AIDES: Record<string, string> = {
   recettes: "Recettes fiscales (SAFIG) et douanières (SYDONIA) recouvrées, rapportées à l'objectif.",
+  recettes_fiscales: "Recettes fiscales recouvrées (SAFIG), rapportées à l'objectif.",
+  recettes_douanieres: "Recettes douanières recouvrées (SYDONIA), rapportées à l'objectif.",
+  recettes_administratives:
+    "Dividendes versés à l'État par les sociétés publiques (SYSOP), rapportés aux dividendes votés.",
   depenses_engagees: "Crédits engagés rapportés aux crédits actuels (Chaîne Dépense).",
   reste_a_payer:
     "Ordonnancé non payé, hors procédures payées hors chaîne (salaires en procédure Solde, dette en débit d'office).",
@@ -23,25 +38,31 @@ const AIDES: Record<string, string> = {
   personnel_ordonnance: "Dépenses de personnel (titre 2) ordonnancées dans la Chaîne Dépense.",
 };
 
-function Kpi({ k }: { k: KpiSynthese }) {
+const LIBELLES: Record<string, string> = {
+  tresorerie: "Trésorerie",
+  recettes: "Total fiscal et douanier",
+  recettes_fiscales: "Recettes fiscales",
+  recettes_douanieres: "Recettes douanières",
+  recettes_administratives: "Recettes administratives (dividendes)",
+  depenses_engagees: "Engagement des crédits",
+  reste_a_payer: "Reste à payer",
+  personnel_ordonnance: "Personnel ordonnancé",
+  dette: "Dette",
+};
+
+const SERIES = [
+  { cle: "recettes", libelle: "Recettes (SAFIG + SYDONIA)", couleur: "var(--serie-2)" },
+  { cle: "depenses", libelle: "Dépenses engagées", couleur: "var(--serie-1)" },
+];
+
+function Kpi({ k, n1 }: { k: KpiSynthese; n1?: ComparaisonN1 | null }) {
   if (k.masque) {
-    return <KpiCard libelle={k.libelle} valeur="—" contexte="Hors de votre périmètre" meta={k.meta} />;
-  }
-  if (k.valeur === null || k.valeur === undefined) {
-    return (
-      <KpiCard
-        libelle={k.libelle}
-        valeur={<span className="text-ink-3">—</span>}
-        contexte={k.meta.statut_source === "non_raccorde" ? "Source non raccordée" : "Aucune donnée"}
-        meta={k.meta}
-        aide={AIDES[k.code]}
-      />
-    );
+    return <KpiCard libelle={k.libelle} valeur="—" contexte="Hors de votre périmètre" />;
   }
   if (k.code === "depenses_engagees") {
     return (
       <KpiCard
-        libelle="Dépenses engagées"
+        libelle="Engagement des crédits"
         valeur={<Pourcentage ratio={k.taux} />}
         contexte={
           <>
@@ -49,15 +70,23 @@ function Kpi({ k }: { k: KpiSynthese }) {
           </>
         }
         jauge={{ valeur: k.taux }}
-        meta={k.meta}
+        pied={
+          n1?.disponible ? (
+            <EcartN1
+              taux={k.taux}
+              reference={n1.taux_engagement}
+              libelle={`${n1.exercice} au ${dateFr(n1.date)}`}
+            />
+          ) : undefined
+        }
         aide={AIDES[k.code]}
       />
     );
   }
-  if (k.code === "recettes") {
+  if (k.code === "recettes" || k.code === "recettes_fiscales" || k.code === "recettes_douanieres") {
     return (
       <KpiCard
-        libelle="Recettes fiscales et douanières"
+        libelle={LIBELLES[k.code]}
         valeur={<Montant gnf={k.valeur} />}
         contexte={
           <>
@@ -66,7 +95,22 @@ function Kpi({ k }: { k: KpiSynthese }) {
         }
         jauge={{ valeur: k.taux, repere: 0.8 }}
         etat={k.taux != null && k.taux < 0.8 ? "serieux" : undefined}
-        meta={k.meta}
+        aide={AIDES[k.code]}
+      />
+    );
+  }
+  if (k.code === "recettes_administratives") {
+    return (
+      <KpiCard
+        libelle={LIBELLES[k.code]}
+        valeur={<Montant gnf={k.valeur} />}
+        contexte={
+          <>
+            <Pourcentage ratio={k.taux} /> des dividendes votés (<Montant gnf={k.reference} />) ·{" "}
+            {nombre(k.nombre)} société(s)
+          </>
+        }
+        jauge={{ valeur: k.taux, repere: 1 }}
         aide={AIDES[k.code]}
       />
     );
@@ -79,7 +123,6 @@ function Kpi({ k }: { k: KpiSynthese }) {
         contexte={`${nombre(k.jours)} jours de décaissements`}
         jauge={{ valeur: (k.jours ?? 0) / 60, repere: 0.5 }}
         etat={k.sous_seuil ? "critique" : undefined}
-        meta={k.meta}
         aide={AIDES[k.code]}
       />
     );
@@ -96,7 +139,6 @@ function Kpi({ k }: { k: KpiSynthese }) {
         }
         jauge={{ valeur: k.taux, repere: k.reference ?? undefined }}
         etat={k.depasse ? "critique" : undefined}
-        meta={k.meta}
         aide={AIDES[k.code]}
       />
     );
@@ -104,94 +146,83 @@ function Kpi({ k }: { k: KpiSynthese }) {
   if (k.code === "reste_a_payer") {
     return (
       <KpiCard
-        libelle="Reste à payer ajusté"
+        libelle="Reste à payer"
         valeur={<Montant gnf={k.valeur} />}
         contexte={
           <>
-            Payé / ordonnancé : <Pourcentage ratio={k.taux} />
+            Payé / ordonnancé : <Pourcentage ratio={k.taux} /> · ordonnancé non payé, à rapprocher avec le
+            Trésor
           </>
         }
-        meta={k.meta}
         aide={AIDES[k.code]}
       />
     );
   }
   return (
     <KpiCard
-      libelle={k.code === "personnel_ordonnance" ? "Personnel ordonnancé" : k.libelle}
+      libelle="Personnel ordonnancé"
       valeur={<Montant gnf={k.valeur} />}
       contexte={
         k.taux != null ? (
           <>
-            <Pourcentage ratio={k.taux} />{" "}
-            {k.code === "personnel_ordonnance" ? "des crédits de personnel" : ""}
+            <Pourcentage ratio={k.taux} /> des crédits de personnel
           </>
         ) : undefined
       }
       jauge={k.taux != null ? { valeur: k.taux } : undefined}
-      meta={k.meta}
       aide={AIDES[k.code]}
     />
   );
 }
 
-const colonnesSources: Colonne<Source>[] = [
-  { header: "Domaine", accessorKey: "domaine_libelle" },
-  { header: "Application", accessorKey: "application" },
-  { header: "Structure", accessorKey: "structure" },
-  {
-    header: "Dernier chargement",
-    id: "dernier",
-    accessorFn: (s) => s.dernier_chargement?.date ?? "",
-    cell: ({ row }) => {
-      const c = row.original.dernier_chargement;
-      if (!c) return <span className="text-ink-2">Aucun</span>;
-      return (
-        <span className="flex flex-col gap-1">
-          <span className="chiffres">{dateHeureFr(c.date)}</span>
-          {c.statut === "echec" && <StatusPill etat="critique" libelle="Échec du chargement" />}
-          {row.original.derniere_date_situation && (
-            <span className="text-sm text-ink-2">
-              situation au {dateFr(row.original.derniere_date_situation)}
-            </span>
-          )}
-        </span>
-      );
-    },
-  },
-  {
-    header: "Statut",
-    accessorKey: "statut",
-    cell: ({ row }) => {
-      const s = row.original;
-      return (
-        <span className="flex flex-col items-start gap-1">
-          <SourceBadge
-            meta={{ source: s.code, statut_source: s.statut, date_situation: s.derniere_date_situation }}
-          />
-          {s.remarque && <span className="text-sm text-ink-2">{s.remarque}</span>}
-        </span>
-      );
-    },
-  },
+const BANDES: { cle: NonNullable<KpiSynthese["bande"]>; titre: string }[] = [
+  { cle: "tresorerie", titre: "Trésorerie" },
+  { cle: "recettes", titre: "Recettes" },
+  { cle: "execution", titre: "Exécution de la dépense" },
+  { cle: "dette", titre: "Dette" },
 ];
 
-const SERIES = [
-  { cle: "recettes", libelle: "Recettes (SAFIG + SYDONIA)", couleur: "var(--serie-2)" },
-  { cle: "depenses", libelle: "Dépenses engagées", couleur: "var(--serie-1)" },
-];
+// Bande de lecture : fournie par l'API, sinon déduite du code de l'indicateur.
+const BANDE_CODE: Record<string, NonNullable<KpiSynthese["bande"]>> = {
+  tresorerie: "tresorerie",
+  recettes: "recettes",
+  recettes_fiscales: "recettes",
+  recettes_douanieres: "recettes",
+  recettes_administratives: "recettes",
+  depenses_engagees: "execution",
+  reste_a_payer: "execution",
+  personnel_ordonnance: "execution",
+  dette: "dette",
+};
+const bandeDe = (k: KpiSynthese) => k.bande ?? BANDE_CODE[k.code];
+
+const disponible = (k: KpiSynthese) => k.masque || (k.valeur !== null && k.valeur !== undefined);
 
 export default function Synthese() {
   const requete = useDonnees<TSynthese>("/synthese/");
+  const { filtres, definir } = useFiltres();
   return (
     <>
-      <TitrePage exporter="synthese" titre="Synthèse" />
+      <TitrePage exporter="synthese" titre="Synthèse">
+        <Segment<"decision" | "demonstration">
+          libelle="Données de la synthèse"
+          valeur={filtres.mode_synthese ?? "decision"}
+          options={[
+            { valeur: "decision", libelle: "Données réelles" },
+            { valeur: "demonstration", libelle: "Démonstration" },
+          ]}
+          onChange={(mode_synthese) => definir({ mode_synthese })}
+        />
+      </TitrePage>
       <EtatPage requete={requete}>{(d) => <Contenu d={d} />}</EtatPage>
     </>
   );
 }
 
 function Contenu({ d }: { d: TSynthese }) {
+  const { utilisateur } = useAuth();
+  const navigate = useNavigate();
+  const voitDepenses = utilisateur?.domaines.includes("depense") ?? false;
   const serie = useMemo(() => {
     const parMois = new Map<string, { mois: string; recettes: number; depenses: number }>();
     for (const l of d.serie_mensuelle) {
@@ -205,66 +236,160 @@ function Contenu({ d }: { d: TSynthese }) {
       .map((m) => ({ ...m, libelle: moisCourt(m.mois, true) }));
   }, [d.serie_mensuelle]);
   const aDesRecettes = d.serie_mensuelle.some((l) => l.indicateur !== "depense_engagee");
+  // Blocs sans donnée : regroupés sur une ligne plutôt qu'affichés en grands cadres vides (S6).
+  // Le total fiscal et douanier n'est listé que s'il est seul (sinon ses composantes le sont déjà).
+  const detailRecettes = d.indicateurs.some(
+    (k) => k.code === "recettes_fiscales" || k.code === "recettes_douanieres",
+  );
+  const enAttente = d.indicateurs.filter((k) => !disponible(k) && !(k.code === "recettes" && detailRecettes));
+  const n1 = d.execution?.comparaison_n1;
+  const compte = d.alertes_compte ?? {};
 
   return (
-    <div className="flex flex-col gap-4">
-      <section id="indicateurs" aria-labelledby="indicateurs-titre">
-        <h2 id="indicateurs-titre" className="sr-only">
-          Indicateurs clés
-        </h2>
-        <BandeauKpi>
-          {d.indicateurs.map((k) => (
-            <Kpi key={k.code} k={k} />
-          ))}
-        </BandeauKpi>
-      </section>
+    <div className="flex flex-col gap-6">
+      <p role="note" className="rounded border border-border bg-surface p-3 text-sm text-ink-2">
+        {d.mode_synthese === "demonstration"
+          ? "Mode démonstration : cette vue peut inclure des chiffres fictifs, identifiés dans le bandeau des sources."
+          : "Vue décisionnelle : seules les données réelles sont présentées."}
+      </p>
+      <BandeauSources indicateurs={d.indicateurs} avertissements={d.avertissements} />
+      {enAttente.length > 0 && (
+        <p className="text-sm text-ink-2">
+          <strong className="text-ink">
+            {d.mode_synthese === "demonstration"
+              ? "Sans donnée pour cette période"
+              : "En attente de données réelles"}{" "}
+            :
+          </strong>{" "}
+          {enAttente.map((k) => `${LIBELLES[k.code] ?? k.libelle} (${nomSource(k.meta.source)})`).join(" · ")}
+          .
+        </p>
+      )}
 
-      <div className="grid gap-4 lg:grid-cols-12">
-        <section id="alertes" aria-labelledby="alertes-titre" className="carte p-4 lg:col-span-7">
+      {BANDES.map((b) => {
+        const kpis = d.indicateurs.filter((k) => bandeDe(k) === b.cle && disponible(k));
+        // Avec la chaîne réactivée : const avecChaine = b.cle === "execution" && d.execution;
+        if (!kpis.length && !(b.cle === "execution" && d.execution)) return null;
+        return (
+          <Zone key={b.cle} titre={b.titre}>
+            {/* Chaîne des montants (Crédits → Engagé → … → Payé · Reste à payer) mise en attente le 19/11/2026.
+                Pour la réactiver : décommenter la ligne ci-dessous et réimporter ChaineMontants.
+            {avecChaine && d.execution && <ChaineMontants i={d.execution.indicateurs} brut={false} />} */}
+            {b.cle === "execution" && d.execution ? (
+              // Mêmes cadres que la page Dépenses (architecture harmonisée).
+              <IndicateursExecution i={d.execution.indicateurs} n1={n1} />
+            ) : (
+              kpis.length > 0 && (
+                <BandeauKpi colonnes={kpis.length >= 4 ? 4 : 3}>
+                  {kpis.map((k) => (
+                    <Kpi key={k.code} k={k} n1={n1} />
+                  ))}
+                </BandeauKpi>
+              )
+            )}
+            {b.cle === "execution" && d.plan_engagement && (
+              <Note etat={d.plan_engagement.nb_depassements ? "vigilance" : undefined}>
+                Plan d'engagement {d.plan_engagement.exercice} · {d.plan_engagement.periode} (
+                {d.plan_engagement.etat}) : plafond <Montant gnf={d.plan_engagement.plafond} />
+                {d.plan_engagement.taux != null && (
+                  <>
+                    , consommé à <Pourcentage ratio={d.plan_engagement.taux} />
+                  </>
+                )}
+                {d.plan_engagement.nb_depassements > 0 &&
+                  ` · ${nombre(d.plan_engagement.nb_depassements)} ministère(s) en dépassement`}
+                .
+              </Note>
+            )}
+          </Zone>
+        );
+      })}
+
+      <Zone titre="Points d'attention">
+        <section id="alertes" aria-labelledby="alertes-titre" className="carte p-4">
+          <p className="mb-2 flex flex-wrap gap-2" aria-label="Alertes ouvertes par gravité">
+            {(["critique", "serieux", "vigilance"] as const).map((g) => (
+              <StatusPill key={g} etat={g} libelle={`${nombre(compte[g] ?? 0)} ${LIBELLES_GRAVITE[g]}`} />
+            ))}
+          </p>
           <ListeAlertes
             alertes={d.alertes}
             compact
-            limite={3}
-            titre="Points d'attention"
+            limite={5}
+            titre="Les plus graves"
             titreId="alertes-titre"
           />
         </section>
-        <Carte
-          id="mensuel"
-          titre="Recettes et dépenses engagées par mois"
-          sousTitre={
-            aDesRecettes
-              ? "En milliards de GNF"
-              : "En milliards de GNF · recettes : SAFIG et SYDONIA non raccordés"
-          }
-          className="lg:col-span-5"
-        >
-          {serie.length ? (
-            <GroupedBarChart
-              donnees={serie}
-              categorie="libelle"
-              series={aDesRecettes ? SERIES : SERIES.slice(1)}
-              libelle="Recettes et dépenses engagées par mois"
-              hauteur={200}
-            />
-          ) : (
-            <p className="text-base text-ink-2">Aucune série disponible.</p>
-          )}
-        </Carte>
-      </div>
+      </Zone>
 
-      <Carte
-        id="sources"
-        titre="État des sources"
-        sousTitre="Dernier chargement et statut de chaque application"
-      >
-        <DataTable
-          donnees={d.sources}
-          colonnes={colonnesSources}
-          libelle="État des sources"
-          recherche={false}
-        />
-      </Carte>
+      {voitDepenses && (
+        <Zone titre="Tendance et où agir">
+          <CourbeExecution
+            parMois={
+              serie.length ? (
+                <GroupedBarChart
+                  donnees={serie}
+                  categorie="libelle"
+                  series={SERIES.slice(1)}
+                  libelle="Engagements par mois de création"
+                  hauteur={240}
+                />
+              ) : (
+                <p className="text-base text-ink-2">Aucune série disponible.</p>
+              )
+            }
+          />
+          <div className={aDesRecettes ? "grid gap-4 lg:grid-cols-2" : ""}>
+            <BlocProjectionDepenses onSection={(code) => navigate(`/depenses?ministere=${code}`)} />
+            {aDesRecettes && (
+              <Carte
+                id="encaissements"
+                titre="Encaissements fiscaux et douaniers par mois"
+                sousTitre="Suivi séparé des engagements ; aucun solde n'est déduit de ce graphique."
+              >
+                <GroupedBarChart
+                  donnees={serie}
+                  categorie="libelle"
+                  series={SERIES.slice(0, 1)}
+                  libelle="Encaissements fiscaux et douaniers"
+                  hauteur={240}
+                />
+              </Carte>
+            )}
+          </div>
+        </Zone>
+      )}
     </div>
+  );
+}
+
+const LIBELLES_GRAVITE = { critique: "critique(s)", serieux: "sérieuse(s)", vigilance: "en vigilance" };
+
+/** Une ligne par source utilisée : application, statut (réel / illustration) et date de situation (S7). */
+function BandeauSources({
+  indicateurs,
+  avertissements,
+}: {
+  indicateurs: KpiSynthese[];
+  avertissements?: string[];
+}) {
+  const sources = new Map<string, KpiSynthese["meta"]>();
+  for (const k of indicateurs)
+    if (!k.masque && !sources.has(k.meta.source)) sources.set(k.meta.source, k.meta);
+  return (
+    <section aria-label="Sources et dates de situation" className="flex flex-col gap-1">
+      <ul className="flex flex-wrap gap-2">
+        {[...sources.values()].map((m) => (
+          <li key={m.source}>
+            <SourceBadge meta={m} />
+          </li>
+        ))}
+      </ul>
+      {avertissements?.map((a) => (
+        <p key={a} role="note" className="text-sm text-ink-2">
+          {a}
+        </p>
+      ))}
+    </section>
   );
 }

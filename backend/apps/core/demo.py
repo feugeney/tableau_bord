@@ -10,6 +10,7 @@ Règles :
 
 from __future__ import annotations
 
+import hashlib
 import random
 from datetime import date, timedelta
 from decimal import Decimal
@@ -18,15 +19,21 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.referentiels.models import (
+    TITRES,
+    RefBeneficiaire,
     RefBureauDouane,
     RefCategorieBien,
     RefCentreImpots,
+    RefEtatDossier,
     RefImpot,
     RefNatureDroitDouane,
+    RefNatureEconomique,
     RefOrganisme,
     RefSecteurActivite,
     RefSection,
+    RefSousSection,
     RefTypeCreancier,
+    RefTypeProcedure,
     TypeOrganisme,
 )
 
@@ -52,7 +59,14 @@ IMPOTS = [  # code, libellé, objectif annuel (Mds)
     ("FONCIER", "Contribution foncière unique", 600),
     ("AUTRES_F", "Autres impôts et taxes", 500),
 ]
-CENTRES = [(f"CTR_{l}", f"Centre de gestion {l}") for l in "ABCDEF"]
+CENTRES = [
+    ("CTR_A", "Centre fictif des grandes entreprises"),
+    ("CTR_B", "Centre fictif des moyennes entreprises"),
+    ("CTR_C", "Centre des impôts fictif de Kaloum"),
+    ("CTR_D", "Centre des impôts fictif de Matoto"),
+    ("CTR_E", "Centre des impôts fictif de Kindia"),
+    ("CTR_F", "Centre des impôts fictif de Kankan"),
+]
 SECTEURS = [
     ("MINES", "Mines et carrières"),
     ("TELECOM", "Télécommunications"),
@@ -71,12 +85,12 @@ NATURES_DROITS = [  # code, libellé, objectif annuel (Mds)
     ("AUTRES_D", "Autres droits et taxes", 300),
 ]
 BUREAUX = [
-    ("BUR_PA", "Bureau portuaire A"),
-    ("BUR_PB", "Bureau portuaire B"),
-    ("BUR_AE", "Bureau aéroportuaire"),
-    ("BUR_FC", "Bureau frontalier C"),
-    ("BUR_FD", "Bureau frontalier D"),
-    ("BUR_IE", "Bureau intérieur E"),
+    ("BUR_PA", "Bureau portuaire fictif (conteneurs)"),
+    ("BUR_PB", "Bureau portuaire fictif (vracs et hydrocarbures)"),
+    ("BUR_AE", "Bureau aéroportuaire fictif"),
+    ("BUR_FC", "Bureau frontalier fictif de Pamelap"),
+    ("BUR_FD", "Bureau frontalier fictif de Nzérékoré"),
+    ("BUR_IE", "Bureau intérieur fictif de Kankan"),
 ]
 CREANCIERS = [  # code, libellé, extérieure, encours (Mds)
     ("MULTI", "Créanciers multilatéraux", True, 38000),
@@ -114,7 +128,204 @@ TYPES_SOCIETES = [
     "Société immobilière",
 ]
 
-SOURCES_DEMO = ["safig", "sydonia", "scie", "dette", "fugas", "sicom", "sysop", "telemo"]
+# Ministères fictifs (codes F01 à F08) : libellé, libellé court, pilier Simandou 2040 (libellé de la source,
+# None = hors pilier), programmes, projets d'investissement.
+# Noms crédibles, toujours marqués « fictif » : aucun ne désigne un ministère réel.
+MINISTERES_FICTIFS = [
+    (
+        "Ministère fictif de la Santé",
+        "Santé (fictif)",
+        "Sante et Bien-etre",
+        ["Soins de santé primaires", "Lutte contre les maladies", "Pilotage et soutien"],
+        [
+            "Hôpital régional de Kankan",
+            "Centres de santé de Boké",
+            "Maternité de Labé",
+            "Équipement des hôpitaux préfectoraux",
+            "Laboratoire national de référence",
+        ],
+    ),
+    (
+        "Ministère fictif de l'Éducation",
+        "Éducation (fictif)",
+        "Education et Culture",
+        ["Enseignement primaire", "Enseignement secondaire", "Alphabétisation"],
+        [
+            "Écoles primaires de Kindia",
+            "Collèges de Faranah",
+            "Cantines scolaires",
+            "Manuels scolaires",
+            "Lycée technique de Mamou",
+        ],
+    ),
+    (
+        "Ministère fictif des Infrastructures",
+        "Infrastructures (fictif)",
+        "Infrastructures, Technologie et Transport",
+        ["Routes nationales", "Ouvrages d'art", "Entretien routier"],
+        [
+            "Route Kindia–Mamou",
+            "Pont de Kouroussa",
+            "Voirie urbaine de Conakry",
+            "Pistes rurales de Siguiri",
+            "Route Labé–Mali",
+        ],
+    ),
+    (
+        "Ministère fictif de l'Agriculture",
+        "Agriculture (fictif)",
+        "Agriculture, Industrie alimentaire et Commerce",
+        ["Production végétale", "Élevage", "Aménagements hydro-agricoles"],
+        [
+            "Plaine rizicole de Koba",
+            "Périmètres maraîchers de Pita",
+            "Vaccination du cheptel",
+            "Magasins de stockage de Gueckédou",
+            "Semences améliorées",
+        ],
+    ),
+    (
+        "Ministère fictif de l'Énergie et de l'Hydraulique",
+        "Énergie et Hydraulique (fictif)",
+        "Infrastructures, Technologie et Transport",
+        ["Électrification", "Eau potable", "Énergies renouvelables"],
+        [
+            "Ligne électrique Linsan–Fomi",
+            "Forages de Dabola",
+            "Centrales solaires rurales",
+            "Adduction d'eau de Kissidougou",
+            "Réseau électrique de Matoto",
+        ],
+    ),
+    (
+        "Ministère fictif de la Sécurité",
+        "Sécurité (fictif)",
+        None,
+        ["Police nationale", "Protection civile", "Pilotage et soutien"],
+        [
+            "Commissariats de Nzérékoré",
+            "Casernes de la protection civile",
+            "Équipement des brigades",
+            "Centre de formation de la police",
+            "Vidéosurveillance de Conakry",
+        ],
+    ),
+    (
+        "Ministère fictif de l'Enseignement supérieur",
+        "Enseignement supérieur (fictif)",
+        "Education et Culture",
+        ["Enseignement universitaire", "Recherche scientifique", "Bourses et œuvres universitaires"],
+        [
+            "Campus de Kankan",
+            "Résidences universitaires",
+            "Bibliothèque universitaire",
+            "Laboratoires de recherche",
+            "Institut supérieur de Boké",
+        ],
+    ),
+    (
+        "Ministère fictif de l'Économie et des Finances",
+        "Économie et Finances (fictif)",
+        "Economie, Finances et Assurances",
+        ["Gestion des finances publiques", "Mobilisation des recettes", "Pilotage et soutien"],
+        [
+            "Informatisation des régies financières",
+            "Hôtel des finances de Kindia",
+            "Archivage numérique",
+            "Formation des comptables publics",
+            "Réseau du Trésor en préfecture",
+        ],
+    ),
+]
+VILLES = [
+    "Conakry",
+    "Kindia",
+    "Boké",
+    "Labé",
+    "Mamou",
+    "Faranah",
+    "Kankan",
+    "Nzérékoré",
+    "Siguiri",
+    "Kissidougou",
+    "Guéckédou",
+    "Macenta",
+    "Kamsar",
+    "Fria",
+    "Dabola",
+    "Pita",
+    "Coyah",
+    "Dubréka",
+    "Kouroussa",
+]
+ACTIVITES_FOURNISSEURS = [
+    "BTP",
+    "Génie civil",
+    "Informatique",
+    "Fournitures de bureau",
+    "Équipements médicaux",
+    "Pharmacie",
+    "Transport et logistique",
+    "Hydraulique",
+    "Énergie solaire",
+    "Restauration collective",
+]
+FORMES = ["SARL", "SA", "SARLU"]
+MOIS_FR = [
+    "janvier",
+    "février",
+    "mars",
+    "avril",
+    "mai",
+    "juin",
+    "juillet",
+    "août",
+    "septembre",
+    "octobre",
+    "novembre",
+    "décembre",
+]
+OBJETS_DEPENSE = {
+    "3": [
+        "Achat de fournitures de bureau",
+        "Carburant et lubrifiants",
+        "Entretien des véhicules",
+        "Maintenance informatique",
+        "Frais de mission",
+        "Location de bureaux",
+        "Électricité et eau",
+    ],
+    "4": [
+        "Subvention de fonctionnement",
+        "Bourses d'études",
+        "Transfert aux collectivités locales",
+        "Contribution aux organisations internationales",
+    ],
+}
+
+SOURCES_DEMO = ["safig", "sydonia", "scie", "dette", "fugas", "sicom", "sysop", "telemo", "tofe"]
+# Source raccordée en production : son illustration n'est chargée que sur demande explicite (--sources).
+SOURCES_DEMO_SUR_DEMANDE = ["chaine_depense"]
+
+# Chaîne Dépense : part des crédits par titre et taux d'engagement relatif au temps écoulé.
+BUDGET_DEPENSE = 42000  # Mds, LFI totale illustrée
+TITRES_DEPENSE = {"1": (0.14, 0.95), "2": (0.24, 1.0), "3": (0.19, 0.85), "4": (0.15, 0.9), "5": (0.28, 0.6)}
+PROCEDURES_PAR_TITRE = {  # (libellé du référentiel, poids)
+    "1": [("Debit d'office - NE PAS PAYER", 0.7), ("Procedure normale", 0.3)],
+    "2": [("Procedure Solde", 0.8), ("Procedure normale", 0.2)],
+    "autres": [
+        ("Procedure normale", 0.55),
+        ("Procedure Normale MP", 0.2),
+        ("Procedure Normale Amenagee", 0.15),
+        ("Procedure Normale devise", 0.05),
+        ("Procedure Normale Amenagee MP", 0.05),
+    ],
+}
+
+
+def _hors_chaine(procedure: str) -> bool:
+    """Procédures payées hors chaîne (solde, débit d'office, régularisations)."""
+    return procedure == "Procedure Solde" or "NE PAS PAYER" in procedure
 
 
 def _refs(modele, lignes):
@@ -124,19 +335,23 @@ def _refs(modele, lignes):
 
 def _sections_fictives(n=8) -> list[str]:
     codes = []
-    for i in range(n):
+    for i, (libelle, court, *_) in enumerate(MINISTERES_FICTIFS[:n]):
         code = f"F{i + 1:02d}"
         RefSection.objects.update_or_create(
             code=code,
-            defaults={
-                "libelle": f"Ministère fictif {chr(65 + i)}",
-                "libelle_court": f"Ministère fictif {chr(65 + i)}",
-                "type": "ministere",
-                "fictif": True,
-            },
+            defaults={"libelle": libelle, "libelle_court": court, "type": "ministere", "fictif": True},
         )
         codes.append(code)
     return codes
+
+
+def _entreprises_fictives(n: int) -> list[str]:
+    """Raisons sociales crédibles, toujours marquées « fictive » : activité, ville, forme juridique."""
+    return [
+        f"{ACTIVITES_FOURNISSEURS[i % len(ACTIVITES_FOURNISSEURS)]} {VILLES[(i * 7) % len(VILLES)]} "
+        f"{FORMES[i % len(FORMES)]} (fictive)"
+        for i in range(n)
+    ]
 
 
 def _organismes_fictifs(r: random.Random) -> tuple[list[RefOrganisme], list[RefOrganisme]]:
@@ -145,7 +360,8 @@ def _organismes_fictifs(r: random.Random) -> tuple[list[RefOrganisme], list[RefO
     def creer(prefixe, types, n, type_org):
         objets = []
         for i in range(n):
-            nom = f"{types[i % len(types)]} {chr(65 + (i // len(types)) % 26)}{'' if i < 26 * len(types) else i}"
+            rang = "" if i < len(types) * len(VILLES) else f" {i // (len(types) * len(VILLES)) + 1}"
+            nom = f"{types[i % len(types)]} de {VILLES[(i // len(types)) % len(VILLES)]}{rang} (organisme fictif)"
             o, _ = RefOrganisme.objects.update_or_create(
                 identifiant_etat=f"DEMO-{prefixe}-{i + 1:03d}",
                 defaults={"nom": nom, "type": type_org, "fictif": True},
@@ -160,6 +376,15 @@ def _organismes_fictifs(r: random.Random) -> tuple[list[RefOrganisme], list[RefO
 
 
 class Generateur:
+    def tofe(self, ch: Chargement):
+        from .tofe import creer_scenario
+
+        if self.date_situation < date(self.exercice, 1, 1):
+            raise ValueError("La date de situation TOFE ne peut pas précéder le début de l'exercice.")
+        ch.detail = {**ch.detail, "profil": "tofe_illustration_v1", "scenario": creer_scenario(self.exercice)}
+        ch.lignes_chargees = len(ch.detail["scenario"]["postes"])
+        ch.save(update_fields=["detail", "lignes_chargees"])
+
     def __init__(self, exercice: int, date_situation: date):
         self.exercice = exercice
         self.date_situation = date_situation
@@ -190,6 +415,292 @@ class Generateur:
     def _saison(self, m: int) -> float:
         """Profil mensuel : creux en début d'année, pic en fin d'année."""
         return 0.85 + 0.3 * (m - 1) / 11
+
+    # --- Chaîne Dépense
+    def chaine_depense(self, ch):
+        from apps.depense.models import FaitEngagement, FaitOperation, FaitRegie, FaitSituationLigne
+
+        c = self._commun(ch)
+        sections = _sections_fictives()
+        for code, libelle in TITRES.items():
+            RefNatureEconomique.objects.update_or_create(
+                code=code, defaults={"libelle": libelle, "niveau": 1, "titre": code}
+            )
+        procedures = {
+            libelle: RefTypeProcedure.objects.get_or_create(
+                libelle=libelle, defaults={"paiement_hors_chaine": _hors_chaine(libelle)}
+            )[0].id
+            for choix in PROCEDURES_PAR_TITRE.values()
+            for libelle, _ in choix
+        }
+        etats = {
+            libelle: RefEtatDossier.objects.get_or_create(libelle=libelle, defaults={"engagement_valide": valide})[0].id
+            for libelle, valide in (("Depense engagee", True), ("Nouvel engagement", False))
+        }
+        fournisseurs = [
+            RefBeneficiaire.objects.update_or_create(nom_normalise=nom.upper(), defaults={"nom_affiche": nom})[0].id
+            for nom in _entreprises_fictives(60)
+        ]
+        poids_fournisseurs = [1 / (i + 1) ** 0.9 for i in range(len(fournisseurs))]
+        beneficiaires_titre = {
+            t: RefBeneficiaire.objects.update_or_create(nom_normalise=nom.upper(), defaults={"nom_affiche": nom})[0].id
+            for t, nom in (("1", "Créancier fictif (service de la dette)"), ("2", "Agents publics (paie fictive)"))
+        }
+
+        avancement = len(self.mois) / 12
+        poids_sections = [self.r.uniform(0.5, 2.0) for _ in sections]
+        total_poids = sum(poids_sections)
+        lignes, engagements, operations, regies = [], [], [], []
+        k = 0
+        for s, (section, poids) in enumerate(zip(sections, poids_sections)):
+            _, _, pilier, programmes, projets = MINISTERES_FICTIFS[s]
+            for titre, (part, rythme) in TITRES_DEPENSE.items():
+                projet = titre == "5"
+                n_sous = 5 if projet else 3
+                for j in range(1, n_sous + 1):
+                    code_ss = f"{section}-{'P' if projet else ''}{j}"
+                    RefSousSection.objects.update_or_create(
+                        code=code_ss,
+                        defaults={
+                            "libelle": f"{projets[j - 1]} (projet fictif)" if projet else programmes[j - 1],
+                            "section_id": section,
+                        },
+                    )
+                    lfi = BUDGET_DEPENSE * part * poids / total_poids / n_sous * self.r.uniform(0.6, 1.4)
+                    lfi_absent = self.r.random() < 0.02
+                    actuel = lfi * self.r.uniform(0.93, 1.10)
+                    if lfi_absent:
+                        lfi = 0
+                    if projet and j == n_sous and s % 3 == 0:
+                        taux = 0.0  # projet sans engagement
+                    elif self.r.random() < 0.03:
+                        taux = 1.03  # ligne en dépassement
+                    else:
+                        taux = min(avancement * rythme * self.r.uniform(0.75, 1.2), 0.98)
+
+                    imputation = {
+                        **c,
+                        "type_budget": "BG",
+                        "section_id": section,
+                        "sous_section_id": code_ss,
+                        "titre": titre,
+                        "nature_id": titre,
+                        "source_financement": "EXT" if projet and j % 2 == 0 else "INT",
+                    }
+                    choix = PROCEDURES_PAR_TITRE.get(titre, PROCEDURES_PAR_TITRE["autres"])
+                    # Dette et personnel : un engagement par mois ; autres titres : 4 à 14 engagements.
+                    mois_eng = (
+                        self.mois
+                        if titre in ("1", "2")
+                        else [
+                            self.r.choices(self.mois, weights=[self._saison(m) for m in self.mois])[0]
+                            for _ in range(self.r.randint(4, 14))
+                        ]
+                    )
+                    tailles = [self.r.uniform(0.3, 1.0) for _ in mois_eng]
+                    engage_ligne = actuel * taux
+                    somme = {"engage": 0.0, "liquide": 0.0, "ordonnance": 0.0, "vbp": 0.0, "paye": 0.0}
+                    for m, t in zip(mois_eng, tailles):
+                        if not engage_ligne:
+                            break
+                        k += 1
+                        jour = (
+                            min(self.r.randint(1, 28), self.date_situation.day)
+                            if (self.date_situation.year == self.exercice and m == self.date_situation.month)
+                            else self.r.randint(1, 28)
+                        )
+                        creation = date(self.exercice, m, jour)
+                        age = (self.date_situation.year - creation.year) * 12 + self.date_situation.month - m
+                        procedure = self.r.choices([p for p, _ in choix], weights=[w for _, w in choix])[0]
+                        hors_chaine = _hors_chaine(procedure)
+                        engage = engage_ligne * t / sum(tailles)
+                        nouveau = not hors_chaine and age == 0 and self.r.random() < 0.3
+                        liquide = 0.0 if nouveau else engage * min(1.0, 0.55 + 0.12 * age) * self.r.uniform(0.85, 1)
+                        ordonnance = liquide * self.r.uniform(0.9, 1)
+                        vbp = ordonnance * self.r.uniform(0.93, 1)
+                        if hors_chaine:
+                            paye = ordonnance
+                        elif age >= 4 and self.r.random() < 0.15:
+                            paye = vbp * self.r.uniform(0.2, 0.6)  # restes à payer anciens
+                        else:
+                            paye = vbp * self.r.uniform(0.8, 1)
+                        beneficiaire = (
+                            beneficiaires_titre.get(titre)
+                            or self.r.choices(fournisseurs, weights=poids_fournisseurs)[0]
+                        )
+                        numero = f"DEMO-{self.exercice}-{k:06d}"
+                        engagements.append(
+                            FaitEngagement(
+                                **imputation,
+                                numero=numero,
+                                cle_imputation=hashlib.sha1(code_ss.encode()).hexdigest(),
+                                type_procedure_id=procedures[procedure],
+                                etat_dossier_id=etats["Nouvel engagement" if nouveau else "Depense engagee"],
+                                beneficiaire_id=beneficiaire,
+                                objet=self._objet_depense(titre, m, projets[j - 1] if projet else ""),
+                                devise="GNF",
+                                date_creation=creation,
+                                date_visa_cf=None if nouveau else creation + timedelta(days=self.r.randint(2, 15)),
+                                date_maj=self.date_situation,
+                                montant_initial=mds(engage),
+                                montant_engage=mds(engage),
+                                montant_engage_cf=mds(0 if nouveau else engage),
+                                montant_liquide=mds(liquide),
+                                montant_ordonnance=mds(ordonnance),
+                                montant_vbp=mds(vbp),
+                                montant_ecp=mds(vbp - paye),
+                                montant_paye=mds(paye),
+                            )
+                        )
+                        if paye:
+                            operations.append(
+                                FaitOperation(
+                                    **imputation,
+                                    numero_engagement=numero,
+                                    type_procedure_id=procedures[procedure],
+                                    etat_dossier_id=etats["Depense engagee"],
+                                    type_origine="Mandat de paiement",
+                                    beneficiaire_id=beneficiaire,
+                                    objet=f"Paiement de l'engagement {numero} (fictif)",
+                                    code_devise="GNF",
+                                    date_visa_vbp=min(creation + timedelta(days=30 + 20 * age), self.date_situation),
+                                    montant_engage=mds(engage),
+                                    montant_liquide=mds(liquide),
+                                    montant_vbp=mds(vbp),
+                                    montant_ordonnance=mds(ordonnance),
+                                    montant_paye=mds(paye),
+                                    montant=mds(paye),
+                                )
+                            )
+                        for cle, v in zip(somme, (engage, liquide, ordonnance, vbp, paye)):
+                            somme[cle] += v
+
+                    reserve = actuel * self.r.uniform(0, 0.03)
+                    regie = actuel * 0.01 if titre == "3" and j == 1 else 0
+                    lignes.append(
+                        FaitSituationLigne(
+                            **imputation,
+                            cle_ligne=hashlib.sha1(f"BG|{code_ss}|{titre}".encode()).hexdigest(),
+                            credit_initial_lfi=mds(lfi),
+                            credit_lfr=mds(actuel),
+                            credit_actuel=mds(actuel),
+                            credit_disponible=mds(actuel - reserve - somme["engage"]),
+                            credit_reserve=mds(reserve),
+                            credit_engage=mds(somme["engage"]),
+                            credit_engage_projet=mds(somme["engage"] * 0.02),
+                            credit_engage_cf=mds(somme["engage"] * 0.98),
+                            montant_liquide=mds(somme["liquide"]),
+                            montant_ordonnance=mds(somme["ordonnance"]),
+                            montant_vbp=mds(somme["vbp"]),
+                            montant_encours_paiement=mds(somme["vbp"] - somme["paye"]),
+                            montant_paye=mds(somme["paye"]),
+                            avance_demarrage=mds(somme["engage"] * 0.05 if projet else 0),
+                            montant_regie=mds(regie),
+                            lfi_absent=lfi_absent,
+                            attributs=self._attributs_depense(pilier, titre),
+                        )
+                    )
+                    if regie:
+                        regies.append(
+                            FaitRegie(
+                                **imputation,
+                                gestionnaire=f"RG{s + 1:02d}",
+                                numero_regie=f"REG-{section}",
+                                nature_flux="avance",
+                                montant_regie=mds(regie),
+                                date_creation=date(self.exercice, 1, 15),
+                                etat_dossier_brut="Régie ouverte",
+                            )
+                        )
+        FaitSituationLigne.objects.bulk_create(lignes)
+        FaitEngagement.objects.bulk_create(engagements, batch_size=1000)
+        FaitOperation.objects.bulk_create(operations, batch_size=1000)
+        FaitRegie.objects.bulk_create(regies)
+        self._controles_depense(ch, lignes, engagements)
+
+    def _attributs_depense(self, pilier: str | None, titre: str) -> dict:
+        """Colonnes additionnelles de l'extraction, en proportions proches d'une extraction réelle."""
+        from apps.depense.services import GREEN, PILIER
+
+        attributs = {}
+        # Dette hors pilier ; environ 8 % des autres lignes sans pilier renseigné.
+        if pilier and titre != "1" and self.r.random() > 0.08:
+            attributs[PILIER] = pilier
+        if titre == "5":
+            attributs[GREEN] = "OUI" if self.r.random() < 0.15 else "NON"
+        elif titre == "3" and self.r.random() < 0.05:
+            attributs[GREEN] = "OUI"
+        return attributs
+
+    def _objet_depense(self, titre: str, mois: int, projet: str) -> str:
+        nom_mois = MOIS_FR[mois - 1]
+        if titre == "1":
+            objet = f"Service de la dette, échéance de {nom_mois}"
+        elif titre == "2":
+            objet = f"Salaires de {nom_mois}"
+        elif titre == "5":
+            objet = f"{self.r.choice(['Travaux', 'Équipements', 'Études et contrôle'])} : {projet}"
+        else:
+            objet = self.r.choice(OBJETS_DEPENSE[titre])
+        return f"{objet} (fictif)"
+
+    def _controles_depense(self, ch, lignes, engagements):
+        """Mêmes contrôles que l'import Chaîne Dépense, calculés sur les données d'illustration (page Qualité)."""
+        from apps.core import regles
+        from apps.qualite.models import ResultatControle
+
+        total_sc = sum((l.credit_engage for l in lignes), Decimal(0))
+        total_eng = sum((e.montant_engage for e in engagements), Decimal(0))
+        depassements = sum(regles.est_ligne_en_depassement(l.credit_disponible) for l in lignes)
+        liq_sup = sum(regles.liquide_depasse_engage(l.montant_liquide, l.credit_engage) for l in lignes)
+        absents = sum(l.lfi_absent for l in lignes)
+        controles = [
+            ResultatControle(
+                chargement=ch,
+                code="concordance_engage",
+                libelle="Concordance du total engagé entre onglets",
+                niveau="bloquant",
+                reussi=regles.concordance_ok(total_sc, total_eng),
+                valeur=total_sc - total_eng,
+                detail={"situation_courante": str(total_sc), "liste_engagements": str(total_eng)},
+            )
+        ] + [
+            ResultatControle(
+                chargement=ch,
+                code=code,
+                libelle=libelle,
+                niveau=niveau,
+                reussi=nombre == 0 or niveau == "info",
+                nombre=nombre,
+            )
+            for code, libelle, niveau, nombre in (
+                ("doublons_cle_ligne", "Doublons sur la clé de ligne budgétaire", "avertissement", 0),
+                (
+                    "absents_credit_initial_lfi",
+                    "Valeurs absentes dans « credit_initial_lfi » (comptées 0)",
+                    "info",
+                    absents,
+                ),
+                ("lignes_depassement", "Lignes en dépassement (disponible < 0)", "avertissement", depassements),
+                ("liquide_sup_engage", "Lignes où le liquidé dépasse l'engagé", "avertissement", liq_sup),
+                ("lignes_sans_section", "Lignes sans code section (rejetées)", "avertissement", 0),
+            )
+        ]
+        ResultatControle.objects.bulk_create(controles)
+        ch.lignes_lues = ch.lignes_chargees = len(lignes) + len(engagements)
+        ch.detail["controles"] = [
+            {
+                "code": c.code,
+                "libelle": c.libelle,
+                "niveau": c.niveau,
+                "reussi": c.reussi,
+                "valeur": str(c.valeur) if c.valeur is not None else None,
+                "nombre": c.nombre,
+                "detail": c.detail,
+            }
+            for c in controles
+        ]
+        ch.save(update_fields=["detail", "lignes_lues", "lignes_chargees"])
 
     # --- SAFIG
     def safig(self, ch):
@@ -584,8 +1095,34 @@ class Generateur:
         from apps.marches_publics.models import FaitMarche, FaitPaiementMarche, FaitReservationCredit
 
         c = self._commun(ch)
-        autorites = [f"Autorité contractante {chr(65 + i)}" for i in range(12)]
-        titulaires = [(f"DEMO-{9000 + i}", f"Entreprise {chr(65 + i % 26)}-{i + 1:03d}") for i in range(70)]
+        autorites = [f"Autorité contractante : {m[0]}" for m in MINISTERES_FICTIFS] + [
+            f"Autorité contractante : {nom} (organisme fictif)"
+            for nom in ("Hôpital national de Conakry", "Université de Kankan", "Agence des routes", "Office de l'eau")
+        ]
+        titulaires = [(f"DEMO-{9000 + i}", nom) for i, nom in enumerate(_entreprises_fictives(70))]
+        projets = [p for m in MINISTERES_FICTIFS for p in m[4]]
+        objets_marche = {
+            "travaux": projets,
+            "fournitures": [
+                "Fournitures de bureau",
+                "Véhicules de service",
+                "Matériel informatique",
+                "Médicaments essentiels",
+                "Mobilier scolaire",
+            ],
+            "services": [
+                "Gardiennage",
+                "Nettoyage des locaux",
+                "Maintenance des groupes électrogènes",
+                "Transport du personnel",
+            ],
+            "prestations_intellectuelles": [
+                "Étude de faisabilité",
+                "Contrôle des travaux",
+                "Audit financier",
+                "Assistance technique",
+            ],
+        }
         types = [
             ("travaux", 0.35, (1, 90)),
             ("fournitures", 0.3, (0.2, 15)),
@@ -611,6 +1148,7 @@ class Generateur:
             ttc = self.r.uniform(*type_[2]) * (1.3 if mode[0] == "entente_directe" else 1)
             visa = debut + timedelta(days=self.r.randint(0, duree))
             num_res = f"RES-{self.exercice}-{i + 1:05d}"
+            objet = f"{libelles_types[type_[0]]} : {self.r.choice(objets_marche[type_[0]])}"
             # Réservation (F3) : légèrement supérieure au marché ; 4 % des marchés la dépassent.
             reserve = ttc * (self.r.uniform(0.85, 0.97) if self.r.random() < 0.04 else self.r.uniform(1.0, 1.12))
             reservations.append(
@@ -621,7 +1159,7 @@ class Generateur:
                     date_validation=visa - timedelta(days=self.r.randint(0, 2)),
                     date_visa=visa,
                     ligne_budgetaire=f"000.F{self.r.randint(1, 8):02d}.{self.r.choice(['2', '3', '5'])}.1.1.10.01",
-                    objet=f"{libelles_types[type_[0]]} (réservation fictive n° {i + 1})",
+                    objet=f"{objet} (réservation fictive n° {i + 1})",
                     autorite_contractante=autorite,
                     montant_reserve=mds(reserve),
                 )
@@ -641,7 +1179,7 @@ class Generateur:
                     numero_immatriculation=numero,
                     date_immatriculation=immatriculation,
                     numero_reservation="" if self.r.random() < 0.03 else num_res,
-                    objet=f"{libelles_types[type_[0]]} (marché fictif n° {i + 1})",
+                    objet=f"{objet} (marché fictif n° {i + 1})",
                     type_marche=type_[0],
                     mode_passation=mode[0],
                     autorite_contractante=autorite,
@@ -722,6 +1260,12 @@ def generer(
         e, d = situation_par_defaut()
         exercice, date_situation = exercice or e, date_situation or d
     g = Generateur(exercice, date_situation)
+    # Comme un chargement réel : exercice et dimension temps (regroupements par période de l'exploration).
+    from apps.referentiels.models import RefExercice
+    from apps.referentiels.temps import assurer_calendrier
+
+    RefExercice.objects.get_or_create(annee=exercice, defaults={"libelle": str(exercice)})
+    assurer_calendrier(exercice, exercice)
     resultat = {}
     for code in sources or SOURCES_DEMO:
         source = Source.objects.get(code=code)

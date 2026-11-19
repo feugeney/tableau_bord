@@ -95,6 +95,7 @@ export function KpiCard({
   aide,
   chargement,
   etat,
+  pied,
 }: {
   libelle: string;
   valeur: ReactNode;
@@ -104,6 +105,8 @@ export function KpiCard({
   aide?: ReactNode;
   chargement?: boolean;
   etat?: Etat;
+  /** Repère complémentaire sous la jauge (ex. comparaison avec l'exercice précédent). */
+  pied?: ReactNode;
 }) {
   return (
     <article className="flex min-w-0 flex-col gap-2 bg-surface p-4">
@@ -125,6 +128,7 @@ export function KpiCard({
       )}
       {contexte && <p className="text-sm text-ink-2">{contexte}</p>}
       {jauge && !chargement && <Jauge {...jauge} libelle={libelle} />}
+      {pied}
       <div className="mt-auto pt-2">
         <SourceBadge meta={meta} />
       </div>

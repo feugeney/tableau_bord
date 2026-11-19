@@ -30,6 +30,21 @@
   );
 }
 
+/* Fond guilloché (motif de billet de banque) pour la colonne de l'écran de connexion. */
+.fond-guilloche {
+  background-image:
+    repeating-radial-gradient(
+      circle at 0% 100%,
+      transparent 0 13px,
+      color-mix(in srgb, var(--on-navy) 6%, transparent) 13px 14px
+    ),
+    repeating-radial-gradient(
+      circle at 100% 0%,
+      transparent 0 13px,
+      color-mix(in srgb, var(--gold) 9%, transparent) 13px 14px
+    );
+}
+
 .mini-drapeau {
   display: inline-block;
   width: 18px;

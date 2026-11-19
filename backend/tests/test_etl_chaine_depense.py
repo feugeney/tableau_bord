@@ -47,7 +47,8 @@ def test_codes_et_libelles_nettoyes(charge):
     assert ligne.regulation == "00"  # espace final supprimé
     assert ligne.sous_paragraphe == "01"
     assert ligne.nature_id == f"{ligne.titre}.1.1.10.01"
-    assert ligne.attributs == {"pillier simandou": "Infrastructures"}
+    assert ligne.attributs["pillier simandou"] == "Infrastructures"
+    assert "credit_initial_lfi" in ligne.attributs["_mesures_absentes"]
     assert RefRegulation.objects.filter(code="00").exists()
     assert not RefRegulation.objects.filter(code="00 ").exists()
     # Libellé de la fixture conservé, libellé brut de l'extraction mémorisé.

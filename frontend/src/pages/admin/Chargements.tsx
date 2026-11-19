@@ -40,8 +40,8 @@ export default function Chargements() {
   return (
     <Carte
       id="chargements"
-      titre="Imports et chargements"
-      sousTitre="Historique de tous les chargements, avec leurs contrôles de qualité. Les imports se lancent depuis « Sources et connecteurs »."
+      titre="Exécutions et qualité"
+      sousTitre="Historique et contrôles de tous les chargements. Lancez SYSOP depuis « Flux ETL » et les imports de fichiers depuis « Connexions aux sources »."
     >
       <div className="mb-3 grid max-w-xl gap-3 sm:grid-cols-2">
         <Champ libelle="Source">

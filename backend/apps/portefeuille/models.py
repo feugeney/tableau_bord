@@ -31,6 +31,7 @@ class FaitSanteFinanciere(FaitBase):
         ("equilibre", "À l'équilibre"),
         ("deficitaire", "Déficitaire"),
         ("non_transmis", "États non transmis"),
+        ("indisponible", "Résultat non disponible"),
     ]
     organisme = models.ForeignKey(RefOrganisme, on_delete=models.PROTECT, related_name="+")
     resultat = montant(null=True)

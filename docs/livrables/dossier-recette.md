@@ -28,7 +28,7 @@ séance par les représentants du SMSI et des directions métiers ; le prestatai
 
 | Lot | Nombre | Résultat |
 |---|---|---|
-| Serveur (règles de gestion, connecteurs, API, droits, exports) | 235 | Tous réussis |
+| Serveur (règles de gestion, connecteurs, API, droits, exports, projections) | 253 | Tous réussis |
 | Interface (pages, charte graphique) | 17 | Tous réussis |
 | Navigation au clavier | 12 vérifications | Toutes réussies |
 | Critères d'acceptation sur l'extraction réelle (6 tests) | 6 | **Non exécutés par défaut** : ils demandent le fichier réel, et le contrôle de concordance y échoue (voir R-03) |
@@ -99,6 +99,7 @@ Couverture de code : 99 % sur les règles de gestion, 93 % sur les connecteurs (
 | D-10 | Analyste : regrouper les marchés par mode de passation, somme du montant TTC | Totaux égaux à ceux de la page Marchés publics | `test_exploration` | |
 | D-11 | Analyste : exporter le résultat | Classeur en GNF non arrondis ; export au journal d'audit | `test_exploration` | |
 | D-12 | Se connecter à la base avec le compte de BI | Lecture des vues agrégées possible ; écriture et tables d'administration refusées | `test_exploration` | |
+| D-13 | Page Dépenses : lire la projection de fin d'exercice, ouvrir « Méthode et fiabilité » | Fourchette, méthodes et vérification affichées ; recalcul à la main du rythme moyen conforme au dictionnaire des indicateurs | `test_projections` | |
 
 ### E. Interopérabilité (TdR 4 ; 6.4)
 
@@ -127,7 +128,8 @@ Couverture de code : 99 % sur les règles de gestion, 93 % sur les connecteurs (
 | R-03 | L'extraction réelle de la Chaîne Dépense échoue au contrôle de concordance (écart de 0,8 Md entre deux onglets) ; elle a été chargée en relevant temporairement la tolérance | Les tests d'acceptation sur le fichier réel ne sont pas concluants | Arbitrage de la DGB sur la tolérance ou correction de l'extraction |
 | R-04 | Lecture directe Oracle de la Chaîne Dépense jamais essayée sur la base réelle | Alimentation automatique non démontrée | Compte en lecture seule fourni par la DNSI |
 | R-05 | Armoiries provisoires (version Wikimedia Commons) | Mention de crédit en pied de page | Fichier officiel du ministère |
-| R-06 | Données ouvertes, second site, analyses prédictives non réalisés | Exigences des TdR 4 et 6.1 non couvertes | Chantiers 5, 6 et 7 |
+| R-06 | Données ouvertes et second site non réalisés | Exigences des TdR 4 et 6.1 non couvertes | Chantiers 6 et 7 |
+| R-07 | Projections fondées sur un seul exercice | Pas de saisonnalité ; sous-estimation en début d'exécution | Chargement de l'exercice précédent |
 
 ## 4. Procès-verbal
 

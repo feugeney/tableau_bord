@@ -50,6 +50,30 @@ def jsonable(v: Any) -> Any:
 
 def meta(source_code: str, f: Optional[Filtres] = None, **extra) -> dict:
     src = Source.objects.filter(code=source_code).first()
+    qualite = {}
+    if src and f and f.date_situation:
+        chargement = (
+            src.chargements.filter(statut="succes", exercice=f.exercice, date_situation=f.date_situation)
+            .order_by("-fin", "-id")
+            .first()
+        )
+        if chargement:
+            qualite = {
+                "test_non_reconcilie": chargement.detail.get("test_non_reconcilie", False),
+                "indicateurs_indisponibles": chargement.detail.get("indicateurs_indisponibles", []),
+                "origine": (
+                    "illustration"
+                    if chargement.detail.get("demo")
+                    else (
+                        "oracle"
+                        if chargement.fichier.startswith("oracle://")
+                        else "postgresql"
+                        if chargement.fichier.startswith("postgresql://")
+                        else "fichier"
+                    )
+                ),
+                "date_extraction": chargement.fin.isoformat() if chargement.fin else None,
+            }
     return {
         "source": source_code,
         "application": src.application if src else source_code,
@@ -57,6 +81,7 @@ def meta(source_code: str, f: Optional[Filtres] = None, **extra) -> dict:
         "exercice": f.exercice if f else None,
         "statut_source": statut_source(source_code),
         "genere_le": timezone.now().isoformat(),
+        **qualite,
         **extra,
     }
 
@@ -68,7 +93,7 @@ def en_cache(fonction):
     def enveloppe(self, request, *args, **kwargs):
         from etl.mart import version_donnees
 
-        brut = f"{request.path}?{request.META.get('QUERY_STRING', '')}|v{version_donnees()}"
+        brut = f"pilotage2:{request.path}?{request.META.get('QUERY_STRING', '')}|v{version_donnees()}"
         if getattr(self, "cache_par_perimetre", False):
             from .models import Domaine
 
@@ -108,4 +133,20 @@ class VueDomaine(APIView):
         f = self.filtres(request)
         if f.date_situation is None:
             return {"meta": meta(self.source_code, f), "data": None}
-        return {"meta": meta(self.source_code, f, paiement=f.paiement), "data": self.calculer(request, f, **kwargs)}
+        informations = meta(self.source_code, f, paiement=f.paiement)
+        donnees = self.calculer(request, f, **kwargs)
+        if "credit_disponible" in informations.get("indicateurs_indisponibles", []):
+            donnees = masquer_disponible(donnees)
+        return {"meta": informations, "data": donnees}
+
+
+def masquer_disponible(donnees):
+    """Une mesure non fournie ne doit pas être présentée comme un zéro confirmé."""
+    if isinstance(donnees, list):
+        return [masquer_disponible(v) for v in donnees]
+    if isinstance(donnees, dict):
+        return {
+            k: None if k in {"credit_disponible", "nb_lignes_depassement"} else masquer_disponible(v)
+            for k, v in donnees.items()
+        }
+    return donnees

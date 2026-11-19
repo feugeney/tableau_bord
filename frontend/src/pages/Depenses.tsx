@@ -1,36 +1,43 @@
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown } from "lucide-react";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import { api } from "@/api/client";
-import { useAlertes, useDonnees } from "@/api/hooks";
+import { useDonnees } from "@/api/hooks";
 import type {
-  Beneficiaires,
-  Chaine,
   Controle,
   Enveloppe,
   IndicateursDepense,
   Mensuel,
   Nature,
-  Procedure,
   RestesAPayer,
   SectionDetail,
   SectionLigne,
+  Simandou,
 } from "@/api/types";
-import { ListeAlertes } from "@/components/Alertes";
-import { HBarList, Legende, PipelineBars, SEGMENTS_EXECUTION, StackedProgress } from "@/components/Barres";
+import { HBarList, Legende, SEGMENTS_EXECUTION, StackedProgress } from "@/components/Barres";
+import { BoutonColonnes, PanneauColonnes } from "@/components/ChoixColonnes";
 import { DataTable, type Colonne } from "@/components/DataTable";
+import { ExportMinisteres } from "@/components/ExportMinisteres";
+import { BoutonFiltres, PanneauFiltres } from "@/components/FiltresDepenses";
 import { GroupedBarChart } from "@/components/GroupedBarChart";
-import { BandeauKpi, Jauge, KpiCard, Note, StatusPill, type Etat } from "@/components/Indicateurs";
+import { Anneau } from "@/components/Anneau";
+import { Jauge, Note, StatusPill, type Etat } from "@/components/Indicateurs";
 import { Montant, Pourcentage } from "@/components/Montant";
-import { SourceBadge } from "@/components/Source";
+import { NotificationAlertes } from "@/components/NotificationAlertes";
+import { PilotageDepense } from "@/components/PilotageDepense";
 import { Carte, Infobulle, Segment } from "@/components/ui/primitives";
 import { Sheet } from "@/components/ui/sheet";
 import { useFiltres, type ModePaiement, type Nature as TNature } from "@/hooks/useFiltres";
+import { plierParts } from "@/lib/anneau";
 import { enMds, moisCourt, nombre, pct } from "@/lib/format";
 
 import { EtatBloc, EtatPage, TitrePage, Zone } from "./commun";
+import { BalanceAgee, BandeauFraicheur, CourbeExecution, MatriceMinisteres } from "./depenses/analyses";
+import { useComparaisonN1, type ComparaisonN1 } from "./depenses/comparaison";
+import { IndicateursExecution } from "./depenses/IndicateursExecution";
+import { BlocProjectionDepenses } from "./depenses/Projection";
 
 const NATURES: { valeur: TNature; libelle: string }[] = [
   { valeur: "", libelle: "Toutes" },
@@ -47,6 +54,9 @@ const TITRE_VERS_NATURE: Record<string, TNature> = {
   "4": "transferts",
   "5": "investissement",
 };
+const NATURE_VERS_TITRE: Record<string, string> = Object.fromEntries(
+  Object.entries(TITRE_VERS_NATURE).map(([t, nature]) => [nature, t]),
+);
 const AIDE_PAIEMENT =
   "Paiements ajustés : les salaires (procédure Solde) et la dette (débit d'office) sont payés hors de la chaîne. " +
   "Ils sont exclus pour ne pas faire apparaître un faux reste à payer. « Bruts » les réintègre.";
@@ -54,6 +64,7 @@ const AIDE_PAIEMENT =
 export default function Depenses() {
   const { filtres, definir } = useFiltres();
   const indicateurs = useDonnees<IndicateursDepense>("/depense/indicateurs/");
+  const [filtresOuverts, setFiltresOuverts] = useState(false);
 
   return (
     <>
@@ -80,7 +91,11 @@ export default function Depenses() {
           />
           <Infobulle contenu={AIDE_PAIEMENT} />
         </div>
+        <BoutonFiltres ouvert={filtresOuverts} onBascule={() => setFiltresOuverts((o) => !o)} />
+        {/* Points d'attention : notification (cloche + annonce), plus un bloc figé dans la page. */}
+        <NotificationAlertes domaine="depense" libelle="Dépenses" />
       </TitrePage>
+      <PanneauFiltres ouvert={filtresOuverts} />
       <EtatPage requete={indicateurs}>{(i, env) => <Contenu i={i} env={env} />}</EtatPage>
     </>
   );
@@ -90,9 +105,9 @@ function Contenu({ i, env }: { i: IndicateursDepense; env: Enveloppe<Indicateurs
   const { filtres, definir } = useFiltres();
   const [params, setParams] = useSearchParams();
   const meta = env.meta;
-  const alertes = useAlertes({ domaine: "depense", statut: "nouvelle,vue" });
-  const brut = filtres.paiement === "brut";
   const ministere = params.get("ministere");
+  const comparaison = useComparaisonN1();
+  const n1 = comparaison.data?.data?.disponible ? comparaison.data.data : null;
 
   function ouvrirMinistere(code: string | null) {
     setParams(
@@ -108,149 +123,210 @@ function Contenu({ i, env }: { i: IndicateursDepense; env: Enveloppe<Indicateurs
 
   return (
     <div className="flex flex-col gap-6">
+      {meta.test_non_reconcilie && (
+        <p className="text-sm text-ink-3" role="status">
+          Données en cours de validation.
+        </p>
+      )}
+      <BandeauFraicheur meta={meta} />
       <Zone titre="Indicateurs clés">
-        <BandeauKpi>
-          <KpiCard
-            libelle="Crédits actuels"
-            valeur={<Montant gnf={i.credit_actuel} />}
-            contexte={
-              <>
-                LFI <Montant gnf={i.credit_initial_lfi} /> ·{" "}
-                {i.variation_lfi != null && i.variation_lfi >= 0 ? "+" : ""}
-                {pct(i.variation_lfi)}
-              </>
-            }
-            meta={meta}
-          />
-          <KpiCard
-            libelle="Taux d'engagement"
-            valeur={<Pourcentage ratio={i.taux_engagement} />}
-            contexte={
-              <>
-                <Montant gnf={i.credit_engage} /> engagés
-              </>
-            }
-            jauge={{ valeur: i.taux_engagement }}
-            meta={meta}
-          />
-          <KpiCard
-            libelle="Taux d'ordonnancement"
-            valeur={<Pourcentage ratio={i.taux_ordonnancement} />}
-            contexte={
-              <>
-                <Montant gnf={i.montant_ordonnance} /> ordonnancés
-              </>
-            }
-            jauge={{ valeur: i.taux_ordonnancement }}
-            meta={meta}
-          />
-          <KpiCard
-            libelle={brut ? "Payé / ordonnancé (brut)" : "Payé / ordonnancé ajusté"}
-            valeur={<Pourcentage ratio={i.paiement.paye_sur_ordonnance} />}
-            contexte={
-              <>
-                <Montant gnf={i.paiement.paye} /> sur <Montant gnf={i.paiement.ordonnance} />
-              </>
-            }
-            jauge={{ valeur: i.paiement.paye_sur_ordonnance }}
-            aide={AIDE_PAIEMENT}
-            meta={meta}
-          />
-          <KpiCard
-            libelle={brut ? "Reste à payer (brut)" : "Reste à payer ajusté"}
-            valeur={<Montant gnf={i.paiement.reste_a_payer} />}
-            contexte={
-              brut ? (
-                "Procédures hors chaîne incluses"
-              ) : (
-                <>
-                  Hors chaîne exclu : <Montant gnf={i.hors_chaine.ordonnance} />
-                </>
-              )
-            }
-            aide={AIDE_PAIEMENT}
-            meta={meta}
-          />
-          <KpiCard
-            libelle="Crédits non engagés"
-            valeur={<Montant gnf={i.credits_non_engages} />}
-            contexte={
-              <>
-                {pct(i.credit_actuel ? i.credits_non_engages / i.credit_actuel : null)} des crédits ·
-                disponible <Montant gnf={i.credit_disponible} />
-              </>
-            }
-            meta={meta}
-          />
-        </BandeauKpi>
+        {/* Chaîne des montants (Crédits → Engagé → … → Payé · Reste à payer) mise en attente le 19/11/2026.
+            Pour la réactiver : décommenter la ligne ci-dessous et réimporter ChaineMontants.
+        <ChaineMontants i={i} brut={filtres.paiement === "brut"} /> */}
+        {/* Chaque taux rapporte une étape à la précédente (montants bruts) ; repère : exercice précédent. */}
+        <IndicateursExecution i={i} n1={n1} />
       </Zone>
 
-      <Zone titre="Points d'attention">
-        <div className="grid gap-4 lg:grid-cols-12">
-          <section id="attention" aria-labelledby="attention-titre" className="carte p-4 lg:col-span-7">
-            {alertes.data ? (
-              <ListeAlertes
-                alertes={alertes.data}
-                limite={4}
-                filtres={false}
-                titre="Alertes des dépenses"
-                titreId="attention-titre"
-              />
-            ) : (
-              <h2 id="attention-titre" className="text-md font-bold text-ink">
-                Alertes des dépenses
-              </h2>
-            )}
-          </section>
-          <BlocChaine />
-        </div>
+      <Zone titre="Répartition">
+        <BlocRepartitions
+          titreActif={filtres.nature ? NATURE_VERS_TITRE[filtres.nature] : null}
+          onTitre={(t) =>
+            definir({
+              nature: filtres.nature === TITRE_VERS_NATURE[t] ? "" : (TITRE_VERS_NATURE[t] ?? ""),
+            })
+          }
+        />
       </Zone>
 
       <Zone titre="Analyses">
         <BlocNatures onNature={(t) => definir({ nature: TITRE_VERS_NATURE[t] ?? "" })} />
+        <BlocSimandou onSection={ouvrirMinistere} />
+        <BlocRestes />
+      </Zone>
+
+      <Zone titre="Tendance">
+        <CourbeExecution parMois={<BlocMensuel />} />
+      </Zone>
+
+      <Zone titre="Où agir">
         <div className="grid gap-4 lg:grid-cols-2">
-          <BlocMensuel />
-          <BlocRestes />
+          <MatriceMinisteres onSection={ouvrirMinistere} />
+          <BlocProjectionDepenses onSection={ouvrirMinistere} />
         </div>
       </Zone>
 
       <Zone titre="Détail">
-        <BlocSections actif={ministere} onSection={ouvrirMinistere} />
-        <div className="grid gap-4 lg:grid-cols-2">
-          <BlocProcedures />
-          <BlocBeneficiaires />
-        </div>
-        <PanneauQualite nbLfiAbsent={i.nb_lfi_absent} />
+        <BlocSections actif={ministere} onSection={ouvrirMinistere} n1={n1} />
       </Zone>
+
+      <PilotageDepense parties={["delais", "avances"]} />
+
+      {/* Contrôles réservés aux contrôleurs, repliés par défaut (P11). */}
+      <PanneauQualite nbLfiAbsent={i.nb_lfi_absent}>
+        <p role="note" className="text-sm text-ink-2">
+          Les paiements sont ceux enregistrés dans la source affichée. Les opérations payées hors chaîne ne
+          constituent pas des paiements nuls confirmés. Le solde ajusté reste à rapprocher avec le Trésor et
+          ne certifie pas un stock d'arriérés.
+        </p>
+        {(i.nb_lfi_absent > 0 ||
+          (i.qualite &&
+            (i.qualite.engage_sup_credits > 0 ||
+              i.qualite.liquide_sup_engage > 0 ||
+              i.qualite.soldes_negatifs.length > 0))) && (
+          <Carte
+            titre="Données à rapprocher"
+            sousTitre="Ces contrôles signalent des écarts de données ; ils ne qualifient pas à eux seuls une irrégularité."
+          >
+            <ul className="list-inside list-disc text-sm text-ink-2">
+              {i.nb_lfi_absent > 0 && (
+                <li>
+                  {nombre(i.nb_lfi_absent)} ligne(s) sans LFI renseignée : la variation sur LFI doit être
+                  interprétée avec cette couverture.
+                </li>
+              )}
+              {i.qualite && i.qualite.engage_sup_credits > 0 && (
+                <li>
+                  {nombre(i.qualite.engage_sup_credits)} ligne(s) avec engagé supérieur aux crédits actuels.
+                </li>
+              )}
+              {i.qualite && i.qualite.liquide_sup_engage > 0 && (
+                <li>{nombre(i.qualite.liquide_sup_engage)} ligne(s) avec liquidé supérieur à engagé.</li>
+              )}
+              {i.qualite?.soldes_negatifs.map((s) => (
+                <li key={s.section}>
+                  Section {s.section} : solde ajusté négatif de <Montant gnf={s.montant} /> à rapprocher ; les
+                  montants source restent conservés.
+                </li>
+              ))}
+            </ul>
+          </Carte>
+        )}
+        <PilotageDepense parties={["concordance"]} />
+      </PanneauQualite>
 
       <DetailMinistere code={ministere} onFermer={() => ouvrirMinistere(null)} />
     </div>
   );
 }
 
-function BlocChaine() {
-  const r = useDonnees<Chaine>("/depense/chaine/");
+/** Indicateur en ligne (libellé, valeur, contexte, jauge fine), pour une colonne compacte. */
+function IndicateurCompact({
+  libelle,
+  valeur,
+  contexte,
+  jauge,
+}: {
+  libelle: string;
+  valeur: ReactNode;
+  contexte: string;
+  jauge: number | null | undefined;
+}) {
   return (
-    <Carte
-      id="chaine"
-      titre="Chaîne de la dépense"
-      sousTitre="Montant et taux de chaque phase sur les crédits actuels"
-      className="lg:col-span-5"
-    >
-      <EtatBloc requete={r}>
-        {(c) => (
-          <>
-            <PipelineBars phases={c.phases} />
-            {c.liquide_depasse_engage && (
-              <Note etat="vigilance">
-                Le liquidé dépasse l'engagé : {nombre(c.nb_lignes_liquide_sup_engage)} lignes à vérifier
-                (régularisations ou liquidations sans engagement préalable).
-              </Note>
-            )}
-          </>
-        )}
-      </EtatBloc>
-    </Carte>
+    <div className="flex flex-col gap-1 py-2.5 first:pt-0 last:pb-0">
+      <dt className="text-sm text-ink-2">{libelle}</dt>
+      <dd className="chiffres text-lg font-bold leading-tight text-ink">{valeur}</dd>
+      <dd className="text-xs text-ink-2">{contexte}</dd>
+      <dd>
+        <Jauge valeur={jauge} libelle={libelle} />
+      </dd>
+    </div>
+  );
+}
+
+function BlocSimandou({ onSection }: { onSection: (code: string) => void }) {
+  const r = useDonnees<Simandou>("/depense/simandou/");
+  return (
+    <EtatBloc requete={r}>
+      {(s) => (
+        // Une seule ligne : indicateurs compacts (1/3) à gauche, exécution par pilier (2/3) à droite.
+        <div className="grid gap-4 lg:grid-cols-12">
+          <section
+            aria-labelledby="simandou-indicateurs-titre"
+            className="carte flex flex-col p-4 lg:col-span-4"
+          >
+            <h3 id="simandou-indicateurs-titre" className="etiquette mb-3">
+              Simandou 2040
+            </h3>
+            <dl className="flex flex-col divide-y divide-border">
+              <IndicateurCompact
+                libelle="Crédits rattachés"
+                valeur={<Montant gnf={s.credit_simandou} />}
+                contexte={`${pct(s.part_simandou)} des crédits actuels · ${s.piliers.length} piliers`}
+                jauge={s.part_simandou}
+              />
+              <IndicateurCompact
+                libelle="Taux d'engagement"
+                valeur={<Pourcentage ratio={s.taux_engagement_simandou} />}
+                contexte="Engagé sur les crédits des piliers"
+                jauge={s.taux_engagement_simandou}
+              />
+              <IndicateurCompact
+                libelle="Projets « green »"
+                valeur={<Montant gnf={s.green.credit_actuel} />}
+                contexte={`${nombre(s.green.nb_lignes)} lignes · ${pct(s.green.part)} des crédits · engagé ${pct(
+                  s.green.taux_engagement,
+                )}`}
+                jauge={s.green.taux_engagement}
+              />
+            </dl>
+          </section>
+          <Carte
+            id="simandou"
+            className="lg:col-span-8"
+            titre="Exécution par pilier Simandou 2040"
+            sousTitre="Colonne « pilier Simandou » de la Chaîne Dépense · cliquer sur un ministère ouvre sa fiche"
+            actions={<Legende elements={SEGMENTS_EXECUTION} />}
+          >
+            <ul className="flex flex-col gap-3">
+              {[...s.piliers, ...(s.hors_pilier ? [s.hors_pilier] : [])].map((p) => (
+                <li key={p.pilier ?? "hors"} className="flex flex-col gap-1">
+                  <span className="flex flex-wrap items-baseline justify-between gap-x-3 text-base">
+                    <span className={p.pilier ? "font-bold text-ink" : "font-bold text-ink-2"}>
+                      {p.libelle}
+                    </span>
+                    <span className="text-ink-2">
+                      <Montant gnf={p.credit_actuel} /> · {pct(p.part)} des crédits · engagé{" "}
+                      {pct(p.taux_engagement)} · payé {pct(p.taux_paiement)} des ordonnancés
+                    </span>
+                  </span>
+                  <StackedProgress
+                    libelle={p.libelle}
+                    segments={SEGMENTS_EXECUTION.map((seg) => ({
+                      ...seg,
+                      valeur: p.empile[seg.code as keyof Nature["empile"]],
+                    }))}
+                  />
+                  {p.pilier && (
+                    <span className="flex flex-wrap gap-x-3 text-sm text-ink-2">
+                      {p.principaux_ministeres.map((m) => (
+                        <button
+                          key={m.code}
+                          type="button"
+                          onClick={() => onSection(m.code)}
+                          className="underline-offset-2 hover:underline"
+                        >
+                          {m.libelle_court}
+                        </button>
+                      ))}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </Carte>
+        </div>
+      )}
+    </EtatBloc>
   );
 }
 
@@ -296,90 +372,228 @@ function BlocNatures({ onNature }: { onNature: (titre: string) => void }) {
   );
 }
 
-const colonnesSections: Colonne<SectionLigne>[] = [
-  {
-    header: "Ministère / institution",
-    id: "libelle",
-    accessorFn: (s) => s.libelle_court,
-    cell: ({ row }) => <span title={row.original.libelle}>{row.original.libelle_court}</span>,
-  },
-  {
-    header: "Crédits",
-    accessorKey: "credit_actuel",
-    cell: ({ getValue }) => <Montant gnf={getValue() as number} />,
-    meta: { numerique: true, exporter: (s) => String(enMds(s.credit_actuel)) },
-  },
-  {
-    header: "Engagé",
-    accessorKey: "taux_engagement",
-    cell: ({ row }) => (
-      <span className="flex min-w-[8rem] flex-col gap-1">
-        <span>
-          <Montant gnf={row.original.credit_engage} /> · {pct(row.original.taux_engagement)}
+function colonnesSections(n1: ComparaisonN1 | null): Colonne<SectionLigne>[] {
+  return [
+    {
+      header: "Ministère / institution",
+      id: "libelle",
+      accessorFn: (s) => s.libelle,
+      cell: ({ row }) => <span className="block min-w-[18rem]">{row.original.libelle}</span>,
+    },
+    {
+      header: "Crédits",
+      accessorKey: "credit_actuel",
+      cell: ({ getValue }) => <Montant gnf={getValue() as number} />,
+      meta: { numerique: true, exporter: (s) => String(enMds(s.credit_actuel)) },
+    },
+    {
+      header: "Engagé",
+      accessorKey: "taux_engagement",
+      cell: ({ row }) => (
+        <span className="flex min-w-[8rem] flex-col gap-1">
+          <span>
+            <Montant gnf={row.original.credit_engage} /> · {pct(row.original.taux_engagement)}
+          </span>
+          <Jauge
+            valeur={row.original.taux_engagement}
+            libelle={`Taux d'engagement ${row.original.libelle_court}`}
+          />
         </span>
-        <Jauge
-          valeur={row.original.taux_engagement}
-          libelle={`Taux d'engagement ${row.original.libelle_court}`}
-        />
-      </span>
-    ),
-    meta: { numerique: true, exporter: (s) => String(s.taux_engagement ?? "") },
-  },
-  {
-    header: "Payé / ordonnancé",
-    accessorKey: "paye_sur_ordonnance",
-    cell: ({ row }) => (
-      <span className="flex min-w-[6rem] flex-col gap-1">
-        <span>{pct(row.original.paye_sur_ordonnance)}</span>
-        <Jauge
-          valeur={row.original.paye_sur_ordonnance}
-          libelle={`Payé sur ordonnancé ${row.original.libelle_court}`}
-        />
-      </span>
-    ),
-    meta: { numerique: true, exporter: (s) => String(s.paye_sur_ordonnance ?? "") },
-  },
-  {
-    header: "Disponible",
-    accessorKey: "credit_disponible",
-    cell: ({ getValue }) => <Montant gnf={getValue() as number} />,
-    meta: { numerique: true, exporter: (s) => String(enMds(s.credit_disponible)) },
-  },
-  {
-    header: "Reste à payer",
-    accessorKey: "reste_a_payer",
-    cell: ({ getValue }) => <Montant gnf={getValue() as number} />,
-    meta: { numerique: true, exporter: (s) => String(enMds(s.reste_a_payer)) },
-  },
-  {
-    header: "Statut",
-    id: "statut",
-    accessorFn: (s) => ({ critique: 0, serieux: 1, vigilance: 2, bon: 3 })[s.statut.severite],
-    cell: ({ row }) => (
-      <StatusPill etat={row.original.statut.severite as Etat} libelle={row.original.statut.libelle} />
-    ),
-    meta: { exporter: (s) => s.statut.libelle },
-  },
-];
+      ),
+      meta: { numerique: true, exporter: (s) => String(s.taux_engagement ?? "") },
+    },
+    {
+      header: n1 ? `Écart ${n1.exercice} (pts)` : "Écart N−1",
+      id: "ecart_n1",
+      accessorFn: (s) => {
+        const ref = n1?.par_section?.[s.code];
+        return ref == null || s.taux_engagement == null ? null : Math.round((s.taux_engagement - ref) * 100);
+      },
+      cell: ({ getValue }) => {
+        const v = getValue() as number | null;
+        return v == null ? "—" : `${v > 0 ? "+" : ""}${v} pts`;
+      },
+      meta: { numerique: true, exporter: (s) => String(n1?.par_section?.[s.code] ?? "") },
+    },
+    {
+      header: "Non engagé",
+      id: "non_engage",
+      accessorFn: (s) => Math.max(s.credit_actuel - s.credit_engage, 0),
+      cell: ({ getValue }) => <Montant gnf={getValue() as number} />,
+      meta: {
+        numerique: true,
+        exporter: (s) => String(enMds(Math.max(s.credit_actuel - s.credit_engage, 0))),
+      },
+    },
+    {
+      header: "Liquidé",
+      accessorKey: "montant_liquide",
+      cell: ({ getValue }) => <Montant gnf={getValue() as number} />,
+      meta: { numerique: true, exporter: (s) => String(enMds(s.montant_liquide)) },
+    },
+    {
+      header: "Ordonnancé",
+      accessorKey: "montant_ordonnance",
+      cell: ({ getValue }) => <Montant gnf={getValue() as number} />,
+      meta: { numerique: true, exporter: (s) => String(enMds(s.montant_ordonnance)) },
+    },
+    {
+      header: "Vu bon à payer",
+      accessorKey: "montant_vbp",
+      cell: ({ getValue }) => <Montant gnf={getValue() as number} />,
+      meta: { numerique: true, exporter: (s) => String(enMds(s.montant_vbp)) },
+    },
+    {
+      header: "Payé",
+      accessorKey: "montant_paye",
+      cell: ({ getValue }) => <Montant gnf={getValue() as number} />,
+      meta: { numerique: true, exporter: (s) => String(enMds(s.montant_paye)) },
+    },
+    {
+      header: "Payé / ordonnancé",
+      accessorKey: "paye_sur_ordonnance",
+      cell: ({ row }) => (
+        <span className="flex min-w-[6rem] flex-col gap-1">
+          <span>{pct(row.original.paye_sur_ordonnance)}</span>
+          <Jauge
+            valeur={row.original.paye_sur_ordonnance}
+            libelle={`Payé sur ordonnancé ${row.original.libelle_court}`}
+          />
+        </span>
+      ),
+      meta: { numerique: true, exporter: (s) => String(s.paye_sur_ordonnance ?? "") },
+    },
+    {
+      header: "Disponible",
+      accessorKey: "credit_disponible",
+      cell: ({ getValue }) => <Montant gnf={getValue() as number} />,
+      meta: {
+        numerique: true,
+        exporter: (s) => (s.credit_disponible == null ? "" : String(enMds(s.credit_disponible))),
+      },
+    },
+    {
+      header: "Reste à payer",
+      accessorKey: "reste_a_payer",
+      cell: ({ getValue }) => <Montant gnf={getValue() as number} />,
+      meta: { numerique: true, exporter: (s) => String(enMds(s.reste_a_payer)) },
+    },
+    {
+      header: "Lignes en dépassement",
+      accessorKey: "nb_lignes_depassement",
+      cell: ({ getValue }) => {
+        const v = getValue() as number | null;
+        return v == null ? "—" : nombre(v);
+      },
+      meta: { numerique: true },
+    },
+    {
+      header: "Statut",
+      id: "statut",
+      accessorFn: (s) => ({ critique: 0, serieux: 1, vigilance: 2, bon: 3 })[s.statut.severite],
+      cell: ({ row }) => (
+        <StatusPill etat={row.original.statut.severite as Etat} libelle={row.original.statut.libelle} />
+      ),
+      meta: { exporter: (s) => s.statut.libelle },
+    },
+  ];
+}
 
-function BlocSections({ actif, onSection }: { actif: string | null; onSection: (code: string) => void }) {
+/** Colonnes affichées par défaut ; liquidé, ordonnancé, VBP, payé et dépassements s'ajoutent à la demande. */
+const COLONNES_MINISTERES_DEFAUT = [
+  "credit_actuel",
+  "taux_engagement",
+  "ecart_n1",
+  "non_engage",
+  "paye_sur_ordonnance",
+  "credit_disponible",
+  "reste_a_payer",
+  "statut",
+];
+const CLE_COLONNES_MINISTERES = "tdb.depenses.colonnes-ministeres";
+
+/** Choix des colonnes mémorisé dans ce navigateur (simple confort : sans stockage, jeu par défaut). */
+function useColonnesVisibles(possibles: string[]) {
+  const [visibles, setVisibles] = useState<string[]>(() => {
+    try {
+      const lu = JSON.parse(localStorage.getItem(CLE_COLONNES_MINISTERES) ?? "null") as unknown;
+      if (Array.isArray(lu)) {
+        const valides = possibles.filter((c) => lu.includes(c));
+        if (valides.length) return valides;
+      }
+    } catch {
+      /* stockage indisponible : jeu par défaut */
+    }
+    return COLONNES_MINISTERES_DEFAUT;
+  });
+  function definir(v: string[]) {
+    setVisibles(v);
+    try {
+      localStorage.setItem(CLE_COLONNES_MINISTERES, JSON.stringify(v));
+    } catch {
+      /* stockage indisponible : le choix vaut pour la session */
+    }
+  }
+  return [visibles, definir] as const;
+}
+
+function BlocSections({
+  actif,
+  onSection,
+  n1,
+}: {
+  actif: string | null;
+  onSection: (code: string) => void;
+  n1: ComparaisonN1 | null;
+}) {
   const r = useDonnees<SectionLigne[]>("/depense/sections/");
+  const colonnes = colonnesSections(n1);
+  const choisissables = colonnes
+    .map((c) => ({
+      id: c.id ?? (c as { accessorKey?: string }).accessorKey ?? "",
+      libelle: String(c.header),
+    }))
+    .filter((c) => c.id && c.id !== "libelle");
+  const [visibles, setVisibles] = useColonnesVisibles(choisissables.map((c) => c.id));
+  const [choix, setChoix] = useState(false);
+  const visibilite = Object.fromEntries(choisissables.map((c) => [c.id, visibles.includes(c.id)]));
   return (
     <Carte
       id="ministeres"
       titre="Ministères et institutions"
-      sousTitre="Choisir un ministère ouvre son détail dans un panneau latéral"
+      sousTitre="Choisir un ministère ouvre son détail dans un panneau latéral · les exports reprennent les colonnes affichées"
+      actions={
+        <span className="inline-flex flex-wrap items-center gap-2">
+          <BoutonColonnes
+            ouvert={choix}
+            onBascule={() => setChoix((o) => !o)}
+            masquees={choisissables.length - visibles.length}
+            controle="colonnes-ministeres"
+          />
+          <ExportMinisteres colonnes={visibles} />
+        </span>
+      }
     >
+      {choix && (
+        <PanneauColonnes
+          id="colonnes-ministeres"
+          colonnes={choisissables}
+          visibles={visibles}
+          onChange={setVisibles}
+          onRetablir={() => setVisibles(COLONNES_MINISTERES_DEFAUT)}
+        />
+      )}
       <EtatBloc requete={r} hauteur="h-96">
         {(s) => (
           <DataTable
             donnees={s}
-            colonnes={colonnesSections}
+            colonnes={colonnes}
+            visibilite={visibilite}
             libelle="Exécution par ministère et institution"
             onLigne={(l) => onSection(l.code)}
             ligneActive={(l) => l.code === actif}
-            nomExport="depenses-ministeres"
-            triInitial={[{ id: "credit_actuel", desc: true }]}
+            // Tri par défaut : les crédits non engagés, là où se joue l'exécution.
+            triInitial={[{ id: "non_engage", desc: true }]}
           />
         )}
       </EtatBloc>
@@ -394,13 +608,12 @@ function DetailMinistere({ code, onFermer }: { code: string | null; onFermer: ()
     <Sheet
       ouvert={Boolean(code)}
       onChange={(o) => !o && onFermer()}
-      titre={d?.libelle_court ?? "Détail du ministère"}
-      description={d?.libelle}
+      titre={d?.libelle ?? "Détail du ministère"}
+      description={code ? `Section budgétaire ${code}` : undefined}
     >
       <EtatBloc requete={r} hauteur="h-96">
-        {(d, env) => (
+        {(d) => (
           <div className="flex flex-col gap-6">
-            <SourceBadge meta={env.meta} />
             <section>
               <h3 className="etiquette mb-2">Par nature</h3>
               <HBarList
@@ -450,7 +663,11 @@ function DetailMinistere({ code, onFermer }: { code: string | null; onFermer: ()
                   ]}
                 />
               ) : (
-                <p className="text-base text-ink-2">Aucune ligne en dépassement.</p>
+                <p className="text-base text-ink-2">
+                  {r.data?.meta.indicateurs_indisponibles?.includes("credit_disponible")
+                    ? "Dépassements non renseignés pour ce chargement."
+                    : "Aucune ligne en dépassement."}
+                </p>
               )}
             </section>
           </div>
@@ -460,13 +677,94 @@ function DetailMinistere({ code, onFermer }: { code: string | null; onFermer: ()
   );
 }
 
+interface Repartitions {
+  axes: {
+    axe: "titre" | "fonction" | "zone" | "type_budget";
+    titre: string;
+    disponible: boolean;
+    parts: ({ code: string; libelle: string } & Record<MesureRepartie, number>)[];
+  }[];
+  titre_filtre: string | null;
+  indisponible: Record<string, string>;
+}
+
+type MesureRepartie = "engage" | "liquide" | "ordonnance" | "vbp" | "paye";
+
+/** Les cinq étapes de la chaîne, dans l'ordre : libellé du sélecteur et titre du cadre. */
+const MESURES_REPARTIES: { valeur: MesureRepartie; libelle: string; titre: string }[] = [
+  { valeur: "engage", libelle: "Engagé", titre: "Répartition de l'engagé" },
+  { valeur: "liquide", libelle: "Liquidé", titre: "Répartition du liquidé" },
+  { valeur: "ordonnance", libelle: "Ordonnancé", titre: "Répartition de l'ordonnancé" },
+  { valeur: "vbp", libelle: "Vu bon à payer", titre: "Répartition du vu bon à payer" },
+  { valeur: "paye", libelle: "Payé", titre: "Répartition du payé" },
+];
+
+/** Quatre anneaux (titre, fonction, zone, BAS) ; un seul sélecteur choisit l'étape de la chaîne répartie. */
+function BlocRepartitions({
+  titreActif,
+  onTitre,
+}: {
+  titreActif: string | null;
+  onTitre: (titre: string) => void;
+}) {
+  const r = useDonnees<Repartitions>("/depense/repartitions/");
+  const [mesure, setMesure] = useState<MesureRepartie>("engage");
+  const choix = MESURES_REPARTIES.find((m) => m.valeur === mesure) ?? MESURES_REPARTIES[0];
+  return (
+    <Carte
+      id="repartitions"
+      titre={choix.titre}
+      sousTitre="Montants bruts de la situation · cliquer sur un titre filtre toute la page"
+      actions={
+        <Segment<MesureRepartie>
+          libelle="Étape de la chaîne répartie"
+          valeur={mesure}
+          options={MESURES_REPARTIES.map(({ valeur, libelle }) => ({ valeur, libelle }))}
+          onChange={setMesure}
+        />
+      }
+    >
+      <EtatBloc requete={r} hauteur="h-72">
+        {(d) => (
+          <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
+            {d.axes.map((a) => (
+              <section key={a.axe} aria-labelledby={`repartition-${a.axe}`} className="min-w-0">
+                <h3 id={`repartition-${a.axe}`} className="etiquette mb-2">
+                  {a.titre}
+                  {a.axe !== "titre" && d.titre_filtre ? ` · titre ${d.titre_filtre}` : ""}
+                </h3>
+                {a.disponible ? (
+                  <Anneau
+                    libelle={`${choix.libelle} ${a.titre.toLowerCase()}`}
+                    // Parts retenues et couleurs fixées par l'engagé : basculer ne repeint rien.
+                    parts={plierParts(
+                      a.parts,
+                      (p) => p[mesure],
+                      (p) => p.engage,
+                      a.axe === "titre",
+                    )}
+                    onPart={a.axe === "titre" ? onTitre : undefined}
+                    actif={a.axe === "titre" ? titreActif : null}
+                  />
+                ) : (
+                  <p className="text-sm text-ink-2">{d.indisponible[a.axe] ?? "Non disponible."}</p>
+                )}
+              </section>
+            ))}
+          </div>
+        )}
+      </EtatBloc>
+    </Carte>
+  );
+}
+
 function BlocMensuel() {
   const r = useDonnees<Mensuel>("/depense/mensuel/");
   return (
     <Carte
       id="rythme"
-      titre="Rythme mensuel des engagements"
-      sousTitre="En milliards de GNF, par mois de création"
+      titre="Engagements par mois de création"
+      sousTitre="En milliards de GNF · dossiers regroupés par création ; pas un historique des paiements"
     >
       <EtatBloc requete={r} hauteur="h-64">
         {(m) => (
@@ -488,14 +786,40 @@ function BlocMensuel() {
               elements={[
                 { libelle: "Mois de l'exercice", couleur: "var(--phase-3)" },
                 { libelle: "Décembre", couleur: "var(--phase-6)" },
-                { libelle: "Période complémentaire", couleur: "var(--serie-2)" },
+                { libelle: "Créé après l'exercice", couleur: "var(--serie-2)" },
               ]}
             />
             {m.engage_periode_complementaire > 0 && (
               <Note>
-                <Montant gnf={m.engage_periode_complementaire} /> d'engagements créés pendant la période
-                complémentaire (après le 31 décembre).
+                <Montant gnf={m.engage_periode_complementaire} /> d'engagements créés après le 31 décembre de
+                l'exercice.
               </Note>
+            )}
+            {m.rapprochement && (
+              <div className="mt-3 text-sm text-ink-2">
+                <p>
+                  {m.rapprochement.perimetre}.{" "}
+                  {m.rapprochement.concordant
+                    ? "Cumul rapproché avec la situation budgétaire."
+                    : "Cumul non rapproché : ne pas l'interpréter comme le total officiel engagé."}
+                </p>
+                <p>
+                  Brut : <Montant gnf={m.rapprochement.brut} /> · Comparable :{" "}
+                  <Montant gnf={m.rapprochement.comparable} /> · Situation budgétaire :{" "}
+                  <Montant gnf={m.rapprochement.reference} />.
+                </p>
+                {m.rapprochement.ecart_perimetre !== 0 && (
+                  <p>
+                    Écart de périmètre : <Montant gnf={m.rapprochement.ecart_perimetre} />. Les dossiers
+                    restent conservés dans le détail.
+                  </p>
+                )}
+                {!m.rapprochement.concordant && (
+                  <p>
+                    Écart résiduel : <Montant gnf={m.rapprochement.ecart_reference} />.
+                  </p>
+                )}
+              </div>
             )}
           </>
         )}
@@ -509,115 +833,17 @@ function BlocRestes() {
   return (
     <Carte
       id="restes"
-      titre="Restes à payer par ancienneté"
-      sousTitre="Ordonnancé non payé, par mois de création de l'engagement"
+      titre="Soldes non payés par ancienneté (balance âgée)"
+      sousTitre="Ordonnancé non payé par date de création ; cette ancienneté n'est pas celle d'une échéance de paiement"
     >
       <EtatBloc requete={r} hauteur="h-64">
-        {(x) => (
-          <>
-            <GroupedBarChart
-              libelle="Restes à payer par mois de création"
-              donnees={x.mois.map((m) => ({
-                ...m,
-                libelle: moisCourt(m.mois_creation, true),
-                reste: enMds(m.reste_a_payer),
-              }))}
-              categorie="libelle"
-              series={[{ cle: "reste", libelle: "Reste à payer", couleur: "var(--phase-3)" }]}
-              miseEnEvidence={(m) => (m.risque_arriere ? "var(--phase-6)" : undefined)}
-            />
-            <Legende
-              elements={[
-                { libelle: "Récent", couleur: "var(--phase-3)" },
-                { libelle: `Plus de ${x.seuil_mois} mois : risque d'arriérés`, couleur: "var(--phase-6)" },
-              ]}
-            />
-            {x.reste_a_payer_risque_arriere > 0 && (
-              <Note etat="critique">
-                <Montant gnf={x.reste_a_payer_risque_arriere} /> restent à payer depuis plus de {x.seuil_mois}{" "}
-                mois.
-              </Note>
-            )}
-          </>
-        )}
+        {(x) => <BalanceAgee x={x} />}
       </EtatBloc>
     </Carte>
   );
 }
 
-function BlocProcedures() {
-  const r = useDonnees<Procedure[]>("/depense/procedures/");
-  return (
-    <Carte id="procedures" titre="Procédures d'exécution">
-      <EtatBloc requete={r}>
-        {(p) => (
-          <DataTable
-            donnees={p}
-            recherche={false}
-            libelle="Procédures d'exécution"
-            colonnes={[
-              {
-                header: "Procédure",
-                accessorKey: "procedure",
-                cell: ({ row }) => (
-                  <span className="flex flex-wrap items-center gap-2">
-                    {row.original.procedure}
-                    {row.original.hors_chaine && (
-                      <span className="rounded-sm border border-dashed border-gold px-1.5 text-xs font-bold text-ink">
-                        hors chaîne
-                      </span>
-                    )}
-                  </span>
-                ),
-              },
-              {
-                header: "Engag.",
-                accessorKey: "nb_engagements",
-                meta: { numerique: true },
-                cell: ({ getValue }) => nombre(getValue() as number),
-              },
-              {
-                header: "Engagé",
-                accessorKey: "montant_engage",
-                meta: { numerique: true },
-                cell: ({ getValue }) => <Montant gnf={getValue() as number} />,
-              },
-              {
-                header: "Payé / ordo.",
-                accessorKey: "paye_sur_ordonnance",
-                meta: { numerique: true },
-                cell: ({ getValue }) => pct(getValue() as number),
-              },
-            ]}
-            triInitial={[{ id: "montant_engage", desc: true }]}
-          />
-        )}
-      </EtatBloc>
-    </Carte>
-  );
-}
-
-function BlocBeneficiaires() {
-  const r = useDonnees<Beneficiaires>("/depense/beneficiaires/", { top: 10 });
-  return (
-    <Carte id="beneficiaires" titre="Dix premiers bénéficiaires" sousTitre="Part dans le total engagé">
-      <EtatBloc requete={r} hauteur="h-80">
-        {(b) => (
-          <HBarList
-            lignes={b.beneficiaires.map((x) => ({
-              cle: String(x.beneficiaire_id ?? x.beneficiaire),
-              libelle: x.beneficiaire,
-              valeur: x.montant_engage,
-              complement: `${pct(x.part)} du total engagé · ${nombre(x.nb_engagements)} engagements`,
-            }))}
-          />
-        )}
-      </EtatBloc>
-    </Carte>
-  );
-}
-
-function PanneauQualite({ nbLfiAbsent }: { nbLfiAbsent: number }) {
+function PanneauQualite({ nbLfiAbsent, children }: { nbLfiAbsent: number; children?: ReactNode }) {
   const [ouvert, setOuvert] = useState(false);
   const r = useQuery({
     queryKey: ["qualite"],
@@ -640,7 +866,8 @@ function PanneauQualite({ nbLfiAbsent }: { nbLfiAbsent: number }) {
         </button>
       </h2>
       {ouvert && (
-        <div id="qualite-contenu" className="px-4 pb-4">
+        <div id="qualite-contenu" className="flex flex-col gap-4 px-4 pb-4">
+          {children}
           <ul className="divide-y divide-border">
             {controles.map((c) => (
               <li key={c.code} className="flex flex-wrap items-center justify-between gap-3 py-2 text-base">

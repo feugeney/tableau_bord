@@ -1,4 +1,4 @@
-import { FileSpreadsheet } from "lucide-react";
+import { BookOpen, FileSpreadsheet, FileText } from "lucide-react";
 import { useState } from "react";
 
 import { telecharger } from "@/api/client";
@@ -7,28 +7,41 @@ import { useFiltres } from "@/hooks/useFiltres";
 
 import { Bouton } from "./ui/primitives";
 
-/** Export Excel de la page courante, avec les filtres affichés (journalisé côté serveur). */
+/** Exports avec les mêmes filtres et droits que la page, journalisés côté serveur. */
 export function BoutonExport({ page }: { page: string }) {
   const { utilisateur } = useAuth();
   const { requete } = useFiltres();
-  const [etat, setEtat] = useState<"repos" | "encours" | "erreur">("repos");
+  const [encours, setEncours] = useState<string | null>(null);
+  const [erreur, setErreur] = useState(false);
   if (!utilisateur?.peut_exporter) return null;
-  async function exporter() {
-    setEtat("encours");
+  async function exporter(format: "xlsx" | "pdf", rubrique = page) {
+    setEncours(`${rubrique}.${format}`);
+    setErreur(false);
     try {
-      await telecharger(`/export/${page}.xlsx`, requete);
-      setEtat("repos");
+      await telecharger(`/export/${rubrique}.${format}`, requete);
     } catch {
-      setEtat("erreur");
+      setErreur(true);
+    } finally {
+      setEncours(null);
     }
   }
   return (
-    <span className="inline-flex items-center gap-2">
-      <Bouton onClick={exporter} disabled={etat === "encours"}>
+    <span className="inline-flex flex-wrap items-center gap-2" aria-busy={encours !== null}>
+      <Bouton onClick={() => exporter("xlsx")} disabled={encours !== null}>
         <FileSpreadsheet className="h-4 w-4" aria-hidden />
-        {etat === "encours" ? "Export en cours…" : "Exporter (Excel)"}
+        {encours === `${page}.xlsx` ? "Export en cours…" : "Exporter (Excel)"}
       </Bouton>
-      {etat === "erreur" && (
+      <Bouton onClick={() => exporter("pdf")} disabled={encours !== null}>
+        <FileText className="h-4 w-4" aria-hidden />
+        {encours === `${page}.pdf` ? "PDF en cours…" : "Exporter (PDF)"}
+      </Bouton>
+      {page === "synthese" && (
+        <Bouton onClick={() => exporter("pdf", "rapport")} disabled={encours !== null}>
+          <BookOpen className="h-4 w-4" aria-hidden />
+          {encours === "rapport.pdf" ? "Rapport en cours…" : "Rapport complet (PDF)"}
+        </Bouton>
+      )}
+      {erreur && (
         <span role="alert" className="text-sm font-bold text-ink">
           Export impossible. Réessayez.
         </span>

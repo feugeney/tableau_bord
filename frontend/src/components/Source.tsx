@@ -19,7 +19,10 @@ export function SourceBadge({
   meta,
   className,
 }: {
-  meta?: Pick<Meta, "source" | "statut_source" | "date_situation" | "application"> | null;
+  meta?:
+    | (Pick<Meta, "source" | "statut_source" | "date_situation" | "application"> &
+        Partial<Pick<Meta, "exercice" | "origine" | "date_extraction">>)
+    | null;
   className?: string;
 }) {
   if (!meta) return null;
@@ -28,6 +31,8 @@ export function SourceBadge({
   const parties = [
     nomSource(meta.source),
     LIBELLES[meta.statut_source],
+    meta.exercice ? `Ex. ${meta.exercice}` : null,
+    meta.origine === "oracle" ? "Oracle" : meta.origine === "fichier" ? "Fichier importé" : null,
     meta.statut_source === "reel" && meta.date_situation ? dateFr(meta.date_situation) : null,
   ].filter(Boolean) as string[];
   return (
@@ -37,7 +42,7 @@ export function SourceBadge({
         demo ? "border-dashed border-gold bg-gold-tint" : "border-border bg-surface",
         className,
       )}
-      title={`Source : ${meta.application ?? nomSource(meta.source)}`}
+      title={`Source : ${meta.application ?? nomSource(meta.source)}${meta.date_extraction ? ` · Extraction : ${dateHeureFr(meta.date_extraction)}` : ""}`}
       translate="no"
     >
       <Icone className="h-3 w-3 shrink-0" aria-hidden />
