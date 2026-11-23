@@ -25,6 +25,9 @@ class Constat:
     variables: dict = field(default_factory=dict)
     valeur: str = ""
     lien: Optional[str] = None
+    # Alerte par dossier : clé stable d'une évaluation à l'autre et détail structuré.
+    cle: str = ""
+    donnees: dict = field(default_factory=dict)
 
 
 def mds(montant) -> str:
@@ -216,6 +219,78 @@ class RestesAPayerAnciens(Evaluateur):
         ]
 
 
+class DossiersArbitrage(Evaluateur):
+    """Dossiers bloqués au-delà du délai et au-delà d'un seuil de montant : arbitrage de la Ministre.
+
+    Une alerte par dossier. Seuils (modifiables dans Administration → Règles d'alerte) :
+    montant_min (GNF), delai_jours, max_dossiers, etats_exclus (motifs de libellé d'état),
+    destinataires et destinataires_relance (identifiants ou adresses), relance_heures.
+    """
+
+    source_code = "chaine_depense"
+
+    def evaluer(self):
+        from apps.depense.titres import ETATS_CLOS, dossiers_en_attente_visa
+
+        f = self.filtres()
+        if not f:
+            return []
+        dossiers = dossiers_en_attente_visa(
+            f,
+            int(self.seuils.get("delai_jours", 15)),
+            Decimal(str(self.seuils.get("montant_min", 10 * 10**9))),
+            tuple(self.seuils.get("etats_exclus", ETATS_CLOS)),
+        )
+        constats = []
+        for d in dossiers[: int(self.seuils.get("max_dossiers", 50))]:
+            variables = {
+                "titre": d["libelle_titre"],
+                "ministere": d["ministere"],
+                "montant": mds(d["montant"]),
+                "jours": d["jours"],
+                "numero": d["numero"],
+                "beneficiaire": d["beneficiaire"] or "bénéficiaire non renseigné",
+                "etape": d["etape"].lower(),
+                "acteur": d["acteur"],
+                "etat": d["etat"] or "état non renseigné",
+            }
+            donnees = {
+                k: d[k]
+                for k in (
+                    "numero",
+                    "section",
+                    "ministere",
+                    "titre",
+                    "libelle_titre",
+                    "beneficiaire",
+                    "objet",
+                    "jours",
+                    "etat",
+                    "etape",
+                    "acteur",
+                    "procedure",
+                    "service",
+                    "sous_section",
+                    "imputation",
+                )
+            }
+            donnees |= {
+                "montant": str(d["montant"]),
+                "depuis": d["depuis"].isoformat(),
+                **{k: d[k].isoformat() if d[k] else None for k in ("date_creation", "date_etat")},
+            }
+            constats.append(
+                Constat(
+                    variables,
+                    valeur=mds(d["montant"]),
+                    lien=f"/depenses?vue_titre={d['titre']}",
+                    cle=d["cle"],
+                    donnees=donnees,
+                )
+            )
+        return constats
+
+
 # ------------------------------------------------------- autres domaines (réels ou illustration)
 
 
@@ -394,7 +469,7 @@ REGLES = [
         {},
         "{nombre} ministère(s) en sous-exécution",
         "Crédits ≥ 20 Mds engagés à moins de 50 % : {ministeres}. Crédits non engagés : {montant}.",
-        "Convoquer les DAF concernés et arrêter un plan d'engagement.",
+        "Inviter les DAF concernés, à travers la DGB, à arrêter un plan d'engagement.",
         "/depenses",
     ),
     (
@@ -464,6 +539,25 @@ REGLES = [
         "Restes à payer de plus de {mois} mois",
         "{montant} ordonnancés depuis plus de {mois} mois restent à payer : risque d'arriérés.",
         "Apurer les restes à payer les plus anciens en priorité.",
+        "/depenses",
+    ),
+    (
+        "depense_arbitrage_ministre",
+        Domaine.DEPENSE,
+        Severite.CRITIQUE,
+        "DossiersArbitrage",
+        {
+            "montant_min": 10 * 10**9,
+            "delai_jours": 15,
+            "max_dossiers": 50,
+            "etats_exclus": ["abandon", "rejet"],
+            "destinataires": [],
+            "destinataires_relance": [],
+            "relance_heures": 48,
+        },
+        "Arbitrage : {titre} · {ministere} · {montant}",
+        "Dossier n° {numero} ({beneficiaire}) en attente du {etape} depuis {jours} jours ({etat}). Acteur : {acteur}.",
+        "Arbitrer ou demander au {acteur} de statuer sur le dossier.",
         "/depenses",
     ),
     # Autres domaines : évaluateurs activés au raccordement ou avec les données de démonstration.
@@ -615,25 +709,40 @@ def evaluer_alertes(chargement: Optional[Chargement] = None, domaine: Optional[s
         except Exception:
             logger.exception("Règle d'alerte %s en échec", regle.code)
             continue
-        Alerte.objects.filter(regle=regle, statut="nouvelle").delete()
         source = Source.objects.filter(code=evaluateur.source_code).first()
+        # Alertes par dossier : mises à jour sur place (statut et notification conservés) ; celles dont le
+        # dossier n'est plus bloqué disparaissent si personne ne les a encore vues.
+        par_cle = {a.cle: a for a in Alerte.objects.filter(regle=regle).exclude(cle="")}
+        cles = {c.cle for c in constats if c.cle}
+        Alerte.objects.filter(regle=regle, statut="nouvelle").exclude(cle__in=cles).delete()
         for c in constats:
             v = _Variables(c.variables)
-            creees.append(
-                Alerte.objects.create(
-                    regle=regle,
-                    domaine=regle.domaine,
-                    source=source,
-                    chargement=chargement,
-                    date_situation=chargement.date_situation if chargement else None,
-                    severite=regle.severite,
-                    titre=regle.titre_modele.format_map(v)[:255],
-                    message=regle.message_modele.format_map(v),
-                    valeur=c.valeur[:64],
-                    action_recommandee=regle.action_recommandee,
-                    lien=c.lien or regle.lien,
-                )
+            champs = dict(
+                domaine=regle.domaine,
+                source=source,
+                severite=regle.severite,
+                titre=regle.titre_modele.format_map(v)[:255],
+                message=regle.message_modele.format_map(v),
+                valeur=c.valeur[:64],
+                action_recommandee=regle.action_recommandee.format_map(v),
+                lien=c.lien or regle.lien,
+                donnees=c.donnees,
             )
+            if chargement is not None:
+                champs |= {"chargement": chargement, "date_situation": chargement.date_situation}
+            existante = par_cle.get(c.cle) if c.cle else None
+            if existante is not None:
+                for k, val in champs.items():
+                    setattr(existante, k, val)
+                existante.save()
+                continue
+            creees.append(Alerte.objects.create(regle=regle, cle=c.cle, **champs))
+    try:
+        from .notifications import notifier_nouvelles_alertes
+
+        notifier_nouvelles_alertes()
+    except Exception:  # un serveur de messagerie absent ne doit pas bloquer l'évaluation
+        logger.exception("Notification des alertes en échec")
     return creees
 
 

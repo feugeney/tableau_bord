@@ -14,6 +14,10 @@ from .models import Domaine, Parametre, Source, StatutSource, TypeConnecteur
 
 FIXTURES = Path(settings.BASE_DIR) / "fixtures" / "referentiels"
 
+REMARQUE_PLAN_ENGAGEMENT = "GDEP.TD_PLAN_ENG* en lecture seule : Administration → Flux ETL → Oracle · Plan d'engagement"
+# Ancien texte, remplacé à l'initialisation s'il n'a pas été modifié par l'administrateur.
+REMARQUE_PLAN_ENGAGEMENT_ANCIENNE = "GDEP.TD_PLAN_ENG* en lecture seule : commande import_plan_engagement"
+
 SOURCES = [
     (
         "tofe",
@@ -45,7 +49,7 @@ SOURCES = [
         StatutSource.NON_RACCORDE,
         TypeConnecteur.AUCUN,
         None,
-        "GDEP.TD_PLAN_ENG* en lecture seule : commande import_plan_engagement",
+        REMARQUE_PLAN_ENGAGEMENT,
     ),
     (
         "safig",
@@ -136,6 +140,16 @@ SOURCES = [
         TypeConnecteur.EXCEL_GENERIQUE,
         None,
         "À raccorder",
+    ),
+    (
+        "sgpip",
+        Domaine.INVESTISSEMENT,
+        "SGPIP (projets d'investissement public)",
+        "DGIP",
+        StatutSource.NON_RACCORDE,
+        TypeConnecteur.AUCUN,
+        None,
+        "À raccorder : décaissements, entrée en vigueur et clôture des projets (ex-Finex)",
     ),
     (
         "pleb",
@@ -254,10 +268,11 @@ def initialiser_tout() -> None:
 
     initialiser_regles_alerte()
     from etl.depots import preparer_dossiers
-    from etl.planification import planifier_releve_depots
+    from etl.planification import planifier_notification_alertes, planifier_releve_depots
 
     preparer_dossiers()
     planifier_releve_depots()
+    planifier_notification_alertes()
 
 
 @transaction.atomic
@@ -309,6 +324,37 @@ def initialiser_flux() -> None:
         source.planification_cron = ""
         source.save(update_fields=["planification_cron"])
         PeriodicTask.objects.filter(name="chargement-chaine_depense").delete()
+
+    # Plan d'engagement (GDEP.TD_PLAN_ENG*) : même connexion Oracle que la Chaîne Dépense, pilote manuel.
+    source = Source.objects.get(code="plan_engagement")
+    if source.remarque == REMARQUE_PLAN_ENGAGEMENT_ANCIENNE:
+        source.remarque = REMARQUE_PLAN_ENGAGEMENT
+        source.save(update_fields=["remarque"])
+    exercice = (
+        Chargement.objects.filter(source=source, statut="succes", exercice__isnull=False)
+        .values_list("exercice", flat=True)
+        .first()
+    )
+    # Lignes budgétaires de la Chaîne Dépense par l'API SIDOF-ENTREPOT (clé dans backend/.env), pilote manuel.
+    FluxETL.objects.get_or_create(
+        code="sidof-lignes-budgetaires",
+        defaults={
+            "nom": "SIDOF · Lignes budgétaires",
+            "source": Source.objects.get(code="chaine_depense"),
+            "profil": "sidof_lignes_budgetaires",
+            "exercice": timezone.localdate().year,
+        },
+    )
+
+    FluxETL.objects.get_or_create(
+        code="oracle-plan-engagement",
+        defaults={
+            "nom": "Oracle · Plan d'engagement",
+            "source": source,
+            "profil": "oracle_plan_engagement",
+            "exercice": exercice or timezone.localdate().year,
+        },
+    )
 
 
 def requetes_oracle_preparees() -> dict[str, str]:

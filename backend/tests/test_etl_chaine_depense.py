@@ -165,6 +165,7 @@ def test_erreur_technique_tracee(db, tmp_path):
 
 
 def test_indicateurs(filtres):
+    filtres.paiement = "ajuste"  # mode ajusté, demandé explicitement (défaut : payé de la chaîne)
     i = services.indicateurs(filtres)
     assert i["credit_initial_lfi"] == 92 * MD
     assert i["credit_actuel"] == 105 * MD
@@ -200,6 +201,7 @@ def test_chaine_depense(filtres):
 
 
 def test_sections_et_statuts(filtres):
+    filtres.paiement = "ajuste"
     par_code = {s["code"]: s for s in services.sections(filtres)}
     assert par_code["14"]["statut"]["libelle"] == "Sous-exécution"
     assert par_code["09"]["statut"]["code"] == "bon_rythme"
@@ -231,6 +233,7 @@ def test_mensuel_periode_complementaire(filtres):
 
 
 def test_restes_a_payer_anciennete(filtres):
+    filtres.paiement = "ajuste"
     r = services.restes_a_payer_anciennete(filtres)
     assert r["reste_a_payer_risque_arriere"] == 2 * MD
     filtres.paiement = "brut"
@@ -269,3 +272,12 @@ def test_alertes_generees(charge):
     a = Alerte.objects.get(regle__code="depense_sous_execution")
     assert a.severite == "critique" and "Infrastructures" in a.message
     assert a.date_situation == date(2026, 9, 15)
+
+
+def test_paiement_par_defaut_est_celui_de_la_chaine(charge):
+    from apps.core.filtres import resoudre_filtres
+
+    f = resoudre_filtres({}, "chaine_depense")
+    assert f.paiement == "brut"
+    i = services.indicateurs(f)
+    assert i["paiement"]["mode"] == "brut" and i["paiement"]["paye"] == i["montant_paye"]

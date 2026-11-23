@@ -12,6 +12,7 @@ from apps.core.etl_admin import CatalogueView, FluxViewSet
 from apps.core.export import ExportView
 from apps.core.export_pdf import ExportPdfView
 from apps.core.interface_locale import interface_locale, sante
+from apps.core.notifications_api import NotificationMailViewSet
 from apps.core.synthese import SyntheseView
 from apps.depense import api as dep
 
@@ -22,6 +23,7 @@ router.register("parametres", core_api.ParametreViewSet, basename="parametre")
 router.register("journal", core_api.JournalViewSet, basename="journal")
 
 routeur_admin = DefaultRouter(trailing_slash=True)
+routeur_admin.register("notifications", NotificationMailViewSet, basename="admin-notification")
 routeur_admin.register("flux-etl", FluxViewSet, basename="admin-flux-etl")
 routeur_admin.register("sources", admin_api.SourceAdminViewSet, basename="admin-source")
 routeur_admin.register("mappings", admin_api.MappingViewSet, basename="admin-mapping")
@@ -43,6 +45,8 @@ depense = [
     path("pilotage/", dep.Pilotage.as_view()),
     path("chaine/", dep.Chaine.as_view()),
     path("natures/", dep.Natures.as_view()),
+    path("titres/", dep.Titres.as_view()),
+    path("titres/<str:titre>/", dep.TitreDetail.as_view()),
     path("sections/", dep.Sections.as_view()),
     path("sections/<str:code>/", dep.SectionDetail.as_view()),
     path("mensuel/", dep.Mensuel.as_view()),

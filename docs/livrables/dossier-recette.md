@@ -127,7 +127,7 @@ Couverture de code : 99 % sur les règles de gestion, 93 % sur les connecteurs (
 | R-02 | La plateforme n'a jamais été démarrée avec Docker ; les services SFTP et RabbitMQ n'ont été vérifiés que par des tests automatiques sans serveur réel | Les cas A-01, A-02, B-08, B-10, B-16, F-01 à F-04 n'ont jamais été déroulés | Installation sur le serveur de recette |
 | R-03 | L'extraction réelle de la Chaîne Dépense échoue au contrôle de concordance (écart de 0,8 Md entre deux onglets) ; elle a été chargée en relevant temporairement la tolérance | Les tests d'acceptation sur le fichier réel ne sont pas concluants | Arbitrage de la DGB sur la tolérance ou correction de l'extraction |
 | R-04 | Lecture directe Oracle de la Chaîne Dépense jamais essayée sur la base réelle | Alimentation automatique non démontrée | Compte en lecture seule fourni par la DNSI |
-| R-05 | Armoiries provisoires (version Wikimedia Commons) | Mention de crédit en pied de page | Fichier officiel du ministère |
+| R-05 | Armoiries provisoires (version Wikimedia Commons) | Crédit dans l'infobulle des armoiries, les propriétés des PDF et l'infobulle de l'image des courriels (retiré du pied de page le 23/11/2026) | Fichier officiel du ministère |
 | R-06 | Données ouvertes et second site non réalisés | Exigences des TdR 4 et 6.1 non couvertes | Chantiers 6 et 7 |
 | R-07 | Projections fondées sur un seul exercice | Pas de saisonnalité ; sous-estimation en début d'exécution | Chargement de l'exercice précédent |
 

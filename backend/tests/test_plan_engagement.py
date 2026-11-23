@@ -173,3 +173,100 @@ def test_restriction_desactivee_en_developpement(settings):
     mardi_10h = datetime(2026, 11, 17, 10, 0)
     PlanEngagementConnector(2019, maintenant=mardi_10h).verifier_creneau()
     OracleChaineDepenseConnector(maintenant=mardi_10h).verifier_creneau()
+
+
+# ------------------------------------------------------------------ flux ETL (Administration → Flux ETL)
+
+
+@pytest.fixture
+def flux_plan(db, settings):
+    from apps.core.models import FluxETL
+
+    settings.SOURCES_EXTERNES = {
+        **settings.SOURCES_EXTERNES,
+        "chaine_depense_oracle": {**settings.SOURCES_EXTERNES["chaine_depense_oracle"], "dsn": "hote:1521/devdep"},
+    }
+    flux = FluxETL.objects.get(code="oracle-plan-engagement")
+    flux.exercice = 2019
+    flux.actif = True
+    flux.save()
+    return flux
+
+
+@pytest.fixture
+def admin_etl(db):
+    from tests.test_api import client_pour, utilisateur
+
+    return client_pour(utilisateur("etl-plan", "dnsi_admin"))
+
+
+def test_flux_cree_a_linitialisation_sans_connecteur_de_source(db):
+    from apps.core.initialisation import REMARQUE_PLAN_ENGAGEMENT, initialiser_flux
+    from apps.core.models import FluxETL, Source
+
+    initialiser_flux()  # idempotent
+    flux = FluxETL.objects.get(code="oracle-plan-engagement")
+    assert flux.profil == "oracle_plan_engagement" and flux.source.code == "plan_engagement"
+    assert not flux.actif and flux.planification_cron == ""
+    # La source n'est pas basculée sur le connecteur de la Chaîne Dépense (aucune planification par source).
+    source = Source.objects.get(code="plan_engagement")
+    assert source.connecteur == "aucun" and source.remarque == REMARQUE_PLAN_ENGAGEMENT
+
+
+def test_lancement_du_flux_charge_le_plan(admin_etl, flux_plan):
+    from unittest.mock import patch
+
+    from apps.core.models import Chargement
+    from apps.depense.models import FaitPlanEngagement
+
+    url = f"/api/v1/admin/flux-etl/{flux_plan.pk}/lancer/"
+    with patch.object(PlanEngagementConnector, "extract", return_value=donnees()) as extraire:
+        r = admin_etl.post(url, {"apercu": True, "exception_horaire_ponctuelle": True}, format="json")
+        assert r.status_code == 200 and r.data["statut"] == "apercu", r.data
+        assert not FaitPlanEngagement.objects.exists()
+        r = admin_etl.post(url, {"apercu": False}, format="json")
+        assert r.status_code == 200 and r.data["statut"] == "succes", r.data
+        assert extraire.call_count == 2
+    ch = Chargement.objects.get(pk=r.data["id"])
+    assert ch.source.code == "plan_engagement" and ch.exercice == 2019
+    assert ch.detail["flux_etl"] == "oracle-plan-engagement" and ch.detail["declenchement"] == "manuel"
+    assert FaitPlanEngagement.objects.filter(chargement=ch).exists()
+    liste = admin_etl.get("/api/v1/admin/flux-etl/").data
+    assert next(f for f in liste if f["code"] == "oracle-plan-engagement")["derniere_execution"]["statut"] == "succes"
+
+
+def test_flux_refuse_sans_connexion_oracle_ou_desactive(admin_etl, flux_plan, settings):
+    url = f"/api/v1/admin/flux-etl/{flux_plan.pk}/lancer/"
+    flux_plan.actif = False
+    flux_plan.save()
+    r = admin_etl.post(url, {"apercu": False}, format="json")
+    assert r.status_code == 400 and "désactivé" in str(r.data)
+    flux_plan.actif = True
+    flux_plan.save()
+    settings.SOURCES_EXTERNES = {
+        **settings.SOURCES_EXTERNES,
+        "chaine_depense_oracle": {**settings.SOURCES_EXTERNES["chaine_depense_oracle"], "dsn": ""},
+    }
+    r = admin_etl.post(url, {"apercu": True}, format="json")
+    assert r.status_code == 400 and "CHAINE_DEPENSE_ORACLE_DSN" in str(r.data)
+
+
+def test_programmation_aux_heures_ouvrees_refusee(admin_etl, flux_plan, settings):
+    settings.ORACLE_RESTRICTION_HEURES_OUVREES = True
+    url = f"/api/v1/admin/flux-etl/{flux_plan.pk}/"
+    assert admin_etl.patch(url, {"planification_cron": "0 10 * * 1-5"}, format="json").status_code == 400
+    assert admin_etl.patch(url, {"planification_cron": "0 2 * * *"}, format="json").status_code == 200
+
+
+def test_exercice_sans_plan_indique_les_exercices_disponibles(db):
+    from unittest.mock import patch
+
+    vide = {k: v.iloc[0:0] for k, v in donnees().items()}
+    with (
+        patch.object(PlanEngagementConnector, "extract", return_value=vide),
+        patch("etl.connecteurs.plan_engagement.exercices_disponibles", return_value=[2018, 2019, 2020, 2023]),
+    ):
+        ch = PlanEngagementConnector(2025, date_situation=date(2026, 11, 23)).executer()
+    assert ch.statut == "echec"
+    assert "aucun plan d'engagement ouvert pour 2025" in ch.message_erreur
+    assert "exercices disponibles dans la Chaîne Dépense : 2018, 2019, 2020, 2023" in ch.message_erreur

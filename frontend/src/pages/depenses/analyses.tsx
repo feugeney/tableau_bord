@@ -152,6 +152,10 @@ export function EcartN1({
 // ------------------------------------------------------------------------- courbe d'exécution (P4)
 
 interface Courbe {
+  date_situation: string | null;
+  engage_serie: number;
+  engage_situation: number;
+  concordant: boolean;
   exercice: number;
   exercice_precedent: number | null;
   points: { mois: number; n: number | null; n1: number | null; prorata: number }[];
@@ -252,11 +256,28 @@ export function CourbeExecution({ parMois }: { parMois: ReactNode }) {
                 </div>
                 {dernier && memeMois?.n1 != null && (
                   <p className="mt-2 text-sm text-ink">
-                    Fin {moisCourt(`${c.exercice}-${String(dernier.mois).padStart(2, "0")}-01`)} :{" "}
-                    <strong className="chiffres">{pct(dernier.n)}</strong> des crédits engagés en {c.exercice}
-                    , contre <strong className="chiffres">{pct(memeMois.n1)}</strong> en{" "}
+                    {c.date_situation
+                      ? `Au ${dateFr(c.date_situation)}`
+                      : `Fin ${moisCourt(`${c.exercice}-${String(dernier.mois).padStart(2, "0")}-01`)}`}{" "}
+                    : <strong className="chiffres">{pct(dernier.n)}</strong> des crédits engagés en{" "}
+                    {c.exercice}, contre <strong className="chiffres">{pct(memeMois.n1)}</strong> pour{" "}
+                    {moisCourt(`${c.exercice}-${String(dernier.mois).padStart(2, "0")}-01`)} en{" "}
                     {c.exercice_precedent}.
                   </p>
+                )}
+                {!dernier && (
+                  <p role="status" className="mt-2 text-sm text-ink-2">
+                    Trajectoire indisponible : engagements datés ou crédits de référence manquants à la date
+                    de situation.
+                  </p>
+                )}
+                {c.concordant === false && (
+                  <Note>
+                    Le cumul daté (<Montant gnf={c.engage_serie} />) diffère de l'engagé de la situation (
+                    <Montant gnf={c.engage_situation} />) : écart de{" "}
+                    <Montant gnf={c.engage_serie - c.engage_situation} />. La courbe ne reconstitue pas le
+                    total officiel engagé.
+                  </Note>
                 )}
                 <p className="mt-1 text-xs text-ink-2">{c.methode}</p>
               </>

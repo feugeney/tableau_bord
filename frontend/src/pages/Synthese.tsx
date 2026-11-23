@@ -266,15 +266,28 @@ function Contenu({ d }: { d: TSynthese }) {
         </p>
       )}
 
+      <Zone titre="Points d'attention">
+        <section id="alertes" aria-labelledby="alertes-titre" className="carte p-4">
+          <p className="mb-2 flex flex-wrap gap-2" aria-label="Alertes ouvertes par gravité">
+            {(["critique", "serieux", "vigilance"] as const).map((g) => (
+              <StatusPill key={g} etat={g} libelle={`${nombre(compte[g] ?? 0)} ${LIBELLES_GRAVITE[g]}`} />
+            ))}
+          </p>
+          <ListeAlertes
+            alertes={d.alertes}
+            compact
+            limite={3}
+            titre="Priorités à examiner"
+            titreId="alertes-titre"
+          />
+        </section>
+      </Zone>
+
       {BANDES.map((b) => {
         const kpis = d.indicateurs.filter((k) => bandeDe(k) === b.cle && disponible(k));
-        // Avec la chaîne réactivée : const avecChaine = b.cle === "execution" && d.execution;
         if (!kpis.length && !(b.cle === "execution" && d.execution)) return null;
         return (
           <Zone key={b.cle} titre={b.titre}>
-            {/* Chaîne des montants (Crédits → Engagé → … → Payé · Reste à payer) mise en attente le 19/11/2026.
-                Pour la réactiver : décommenter la ligne ci-dessous et réimporter ChaineMontants.
-            {avecChaine && d.execution && <ChaineMontants i={d.execution.indicateurs} brut={false} />} */}
             {b.cle === "execution" && d.execution ? (
               // Mêmes cadres que la page Dépenses (architecture harmonisée).
               <IndicateursExecution i={d.execution.indicateurs} n1={n1} />
@@ -304,23 +317,6 @@ function Contenu({ d }: { d: TSynthese }) {
           </Zone>
         );
       })}
-
-      <Zone titre="Points d'attention">
-        <section id="alertes" aria-labelledby="alertes-titre" className="carte p-4">
-          <p className="mb-2 flex flex-wrap gap-2" aria-label="Alertes ouvertes par gravité">
-            {(["critique", "serieux", "vigilance"] as const).map((g) => (
-              <StatusPill key={g} etat={g} libelle={`${nombre(compte[g] ?? 0)} ${LIBELLES_GRAVITE[g]}`} />
-            ))}
-          </p>
-          <ListeAlertes
-            alertes={d.alertes}
-            compact
-            limite={5}
-            titre="Les plus graves"
-            titreId="alertes-titre"
-          />
-        </section>
-      </Zone>
 
       {voitDepenses && (
         <Zone titre="Tendance et où agir">

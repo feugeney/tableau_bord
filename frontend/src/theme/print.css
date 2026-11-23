@@ -61,3 +61,32 @@
     box-shadow: none !important;
   }
 }
+
+/* Fiche ouverte en fenêtre modale imprimable (components/ui/modal.tsx) : seule la fenêtre est imprimée,
+   en A4 portrait, avec l'en-tête officiel ; la page en arrière-plan, le fond grisé et les panneaux ouverts
+   ne sortent pas. */
+@media print {
+  @page fiche {
+    size: A4 portrait;
+    margin: 12mm 12mm 14mm;
+  }
+  body:has(.modal-imprimable) > *:not(.modal-imprimable, :has(.modal-imprimable)) {
+    display: none !important;
+  }
+  body:has(.modal-imprimable) .modal-fond {
+    display: none !important;
+  }
+  .modal-imprimable {
+    page: fiche;
+    position: static !important;
+    transform: none !important;
+    width: auto !important;
+    max-width: none !important;
+    max-height: none !important;
+    border: 0 !important;
+  }
+  .modal-imprimable .modal-corps {
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+}

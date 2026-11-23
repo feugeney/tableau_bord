@@ -43,7 +43,7 @@ PARAMETRES_DEFAUT: dict[str, tuple[Any, str, str]] = {
     "recouvrement_taux_min": (0.80, "Réalisé / objectif sous lequel le recouvrement est en retard", "taux"),
     "dette_pib_seuil_cedeao": (0.70, "Seuil de convergence CEDEAO du ratio dette / PIB", "taux"),
     "concordance_tolerance_par_million": (1, "Écart toléré entre onglets (GNF par million)", "GNF/M"),
-    "paiement_affichage_defaut": ("ajuste", "Affichage des paiements par défaut (ajuste | brut)", ""),
+    "paiement_affichage_defaut": ("brut", "Affichage des paiements par défaut (brut = Chaîne Dépense | ajuste)", ""),
     "entente_directe_part_max": (
         0.10,
         "Part maximale des marchés passés par entente directe, en montant (à confirmer : code des marchés publics)",
@@ -53,6 +53,33 @@ PARAMETRES_DEFAUT: dict[str, tuple[Any, str, str]] = {
     "projection_engagement_min": (
         0.80,
         "Taux d'engagement projeté au 31 décembre sous lequel une alerte est levée (à confirmer : DGB)",
+        "taux",
+    ),
+    # Vue « Toute la chaîne, titre par titre » : le taux d'engagement d'un titre est rapporté au temps
+    # écoulé de l'exercice (au 18 novembre, 88 % de l'année : 81 % engagé donne 0,92 → vert).
+    "voyant_titre_ratio_bon": (
+        0.85,
+        "Engagé / temps écoulé de l'exercice au-delà duquel un titre est au vert",
+        "taux",
+    ),
+    "voyant_titre_ratio_critique": (
+        0.50,
+        "Engagé / temps écoulé de l'exercice sous lequel un titre est au rouge (entre les deux : jaune)",
+        "taux",
+    ),
+    "titres_paiement_non_suivi": (
+        "1",
+        "Titres dont le paiement n'est pas suivi dans la chaîne (dette : débit d'office), séparés par des virgules",
+        "code",
+    ),
+    "visa_cf_delai_max_jours": (
+        4,
+        "Délai création → visa du contrôle financier au-delà duquel il est en retard",
+        "jours",
+    ),
+    "paye_sur_ordonnance_bon_min": (
+        0.80,
+        "Payé / ordonnancé (chaîne) au-delà duquel le Trésor est au vert (rouge sous le seuil de retard)",
         "taux",
     ),
 }
@@ -210,6 +237,56 @@ def statut_ministere(
     if t_eng is not None and t_eng < _dec(parametre("a_suivre_taux_engagement_max", surcharges)):
         return STATUT_A_SUIVRE
     return STATUT_BON_RYTHME
+
+
+# ------------------------------------------------------------ titres (vue Ministre)
+
+
+def temps_ecoule_exercice(exercice: Optional[int], date_situation: Optional[date]) -> Optional[Decimal]:
+    """Part de l'exercice écoulée à la date de situation (1 pendant la période complémentaire)."""
+    if not exercice or not date_situation:
+        return None
+    if date_situation.year > exercice:
+        return Decimal(1)
+    if date_situation.year < exercice:
+        return Decimal(0)
+    jours = (date(exercice, 12, 31) - date(exercice, 1, 1)).days + 1
+    return Decimal(date_situation.timetuple().tm_yday) / Decimal(jours)
+
+
+def titres_paiement_non_suivi(surcharges: Optional[Mapping[str, Any]] = None) -> set[str]:
+    valeur = parametre("titres_paiement_non_suivi", surcharges)
+    if isinstance(valeur, (list, tuple)):
+        return {str(v).strip() for v in valeur if str(v).strip()}
+    return {v.strip() for v in str(valeur or "").split(",") if v.strip()}
+
+
+def voyant_titre(
+    taux_engagement: Optional[Nombre],
+    temps_ecoule: Optional[Nombre],
+    surcharges: Optional[Mapping[str, Any]] = None,
+) -> Optional[str]:
+    """Vert / jaune / rouge (« bon », « vigilance », « critique ») : engagé rapporté au temps écoulé."""
+    if taux_engagement is None or not temps_ecoule:
+        return None
+    ratio = _dec(taux_engagement) / _dec(temps_ecoule)
+    if ratio >= _dec(parametre("voyant_titre_ratio_bon", surcharges)):
+        return "bon"
+    if ratio < _dec(parametre("voyant_titre_ratio_critique", surcharges)):
+        return "critique"
+    return "vigilance"
+
+
+def voyant_paiement(paye_sur_ordonnance: Optional[Nombre], surcharges: Optional[Mapping[str, Any]] = None):
+    """Rythme de paiement du Trésor : payé / ordonnancé dans la chaîne."""
+    if paye_sur_ordonnance is None:
+        return None
+    t = _dec(paye_sur_ordonnance)
+    if t < _dec(parametre("retard_paiement_taux_max", surcharges)):
+        return "critique"
+    if t < _dec(parametre("paye_sur_ordonnance_bon_min", surcharges)):
+        return "vigilance"
+    return "bon"
 
 
 # ------------------------------------------------------------------ lignes

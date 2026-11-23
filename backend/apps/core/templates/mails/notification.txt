@@ -1,0 +1,47 @@
+{% autoescape off %}RÉPUBLIQUE DE GUINÉE
+Ministère de l’Économie, des Finances et du Budget
+Tableau de bord des finances publiques
+
+{% if exemple %}TEST DE MODÈLE — Données fictives d’illustration. Aucune alerte réelle n’est créée ou modifiée.
+{% endif %}
+{{ titre }}
+Référence : {{ reference }}
+Date d’émission : {{ date_envoi|date:"d/m/Y à H:i" }} (heure de Conakry)
+
+Madame, Monsieur,
+
+{{ introduction }}
+{% if retard_dossier %}
+Seuil de signalement du retard : {{ seuil_retard }} jours. Les durées ci-dessous sont constatées à la date de situation des données.
+{% endif %}
+{% if delai %}
+Délai de relance paramétré : {{ delai }} heures.
+{% endif %}
+{% if elements %}Éléments concernés : {{ elements|length }}
+{% endif %}{% for e in elements %}
+{{ e.reference }} — {{ e.titre }}
+Niveau d’attention : {{ e.severite }}
+Situation au : {{ e.date_situation|date:"d/m/Y"|default:"Non renseignée" }}
+Source : {{ e.source }}
+{% if e.illustration %}Données d’illustration — source non raccordée.
+{% endif %}{{ e.constat }}
+{% if e.numero %}Dossier : {{ e.numero }}
+Étape en attente : {{ e.etape|default:"Non renseignée" }}
+Service ou acteur concerné : {{ e.acteur|default:"Non renseigné" }}
+{% if e.depuis %}En attente depuis le : {{ e.depuis|date:"d/m/Y" }}
+{% endif %}{% if e.jours != None %}Durée d’attente constatée : {{ e.jours }} jours
+{% endif %}{% endif %}{% if e.notification_initiale %}Notification initiale : {{ e.notification_initiale|date:"d/m/Y à H:i" }} (heure de Conakry)
+{% endif %}{% if e.lien %}Consulter cet élément : {{ e.lien }}
+{% endif %}{% endfor %}
+{% if action %}Suite recommandée
+{{ action }}
+{% endif %}
+{% if categorie != 'test' %}Ces éléments proviennent de contrôles automatisés et appellent, le cas échéant, une vérification par les services compétents.
+{% endif %}{% if lien %}{{ bouton }} : {{ lien }}
+{% endif %}
+Tableau de bord des finances publiques — Notification automatique
+
+Message destiné aux personnes habilitées. Veuillez privilégier le tableau de bord pour consulter les informations et renseigner les suites données. Cette boîte d’envoi automatique n’est pas destinée au traitement des réponses.
+
+© {% now "Y" %} SMSI · Tous droits réservés
+{% endautoescape %}

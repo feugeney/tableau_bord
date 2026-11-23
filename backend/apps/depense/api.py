@@ -40,6 +40,26 @@ class Natures(VueDepense):
         return services.natures(f)
 
 
+class Titres(VueDepense):
+    """Vue « Toute la chaîne, titre par titre » (note à la Ministre, vue 1)."""
+
+    def calculer(self, request, f):
+        from .titres import titres
+
+        return titres(f)
+
+
+class TitreDetail(VueDepense):
+    """Fiche d'un titre : chaîne, ministères, acteurs et alertes (note à la Ministre, vue 2)."""
+
+    def calculer(self, request, f, titre):
+        from .titres import TITRE_VERS_NATURE, titre_detail
+
+        if titre not in TITRE_VERS_NATURE:
+            raise NotFound("Titre inconnu.")
+        return titre_detail(f, titre)
+
+
 class Sections(VueDepense):
     def calculer(self, request, f):
         return services.sections(f)

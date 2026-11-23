@@ -15,6 +15,7 @@ const Mappings = lazy(() => import("./Mappings"));
 const Utilisateurs = lazy(() => import("./Utilisateurs"));
 const Partages = lazy(() => import("./Partages"));
 const Regles = lazy(() => import("./Regles"));
+const Notifications = lazy(() => import("./Notifications"));
 const Parametres = lazy(() => import("./Parametres"));
 const Entrepot = lazy(() => import("./Entrepot"));
 const Journal = lazy(() => import("./Journal"));
@@ -31,6 +32,7 @@ const RUBRIQUES = [
   { chemin: "utilisateurs", libelle: "Utilisateurs et accès", element: <Utilisateurs /> },
   { chemin: "partages", libelle: "Partage de données (API)", element: <Partages /> },
   { chemin: "regles", libelle: "Règles d'alerte", element: <Regles /> },
+  { chemin: "notifications", libelle: "Notifications et mails", element: <Notifications /> },
   { chemin: "parametres", libelle: "Paramètres et seuils", element: <Parametres /> },
   { chemin: "journal", libelle: "Journal d'audit", element: <Journal /> },
 ];

@@ -54,10 +54,13 @@ export function NotificationAlertes({ domaine, libelle }: { domaine: string; lib
 
   const gravite = pire(alertes);
   const critiques = alertes.filter((a) => a.severite === "critique").length;
-  const resume =
-    alertes.length === 0
-      ? "aucune alerte ouverte"
-      : `${alertes.length} alerte(s) ouverte(s)${critiques ? `, dont ${critiques} critique(s)` : ""}`;
+  const resume = r.isError
+    ? "alertes indisponibles"
+    : r.isLoading
+      ? "chargement des alertes"
+      : alertes.length === 0
+        ? "aucune alerte ouverte"
+        : `${alertes.length} alerte(s) ouverte(s)${critiques ? `, dont ${critiques} critique(s)` : ""}`;
 
   function ouvrir() {
     setAnnonce(false);
@@ -120,10 +123,23 @@ export function NotificationAlertes({ domaine, libelle }: { domaine: string; lib
         ouvert={ouvert}
         onChange={setOuvert}
         titre="Points d'attention"
+        largeur="max-w-[800px]"
         description={`${libelle} · ${resume}`}
       >
-        {alertes.length ? (
-          <ListeAlertes alertes={alertes} filtres />
+        <p className="mb-3 text-sm text-ink-2">
+          Périmètre global des alertes du domaine · indépendant des filtres de consultation.
+        </p>
+        {r.isError ? (
+          <div role="alert">
+            <p className="text-sm text-ink">
+              Les alertes n’ont pas pu être chargées. Leur absence ne peut pas être confirmée.
+            </p>
+            <button type="button" className="mt-2 text-sm font-bold underline" onClick={() => r.refetch()}>
+              Réessayer
+            </button>
+          </div>
+        ) : alertes.length ? (
+          <ListeAlertes alertes={alertes} filtres onNavigation={() => setOuvert(false)} />
         ) : (
           <p className="text-base text-ink-2">{r.isLoading ? "Chargement…" : "Aucune alerte ouverte."}</p>
         )}

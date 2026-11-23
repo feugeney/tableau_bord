@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Optional
 
+from django.conf import settings
 from django.db import connection
 from rest_framework.exceptions import ValidationError
 
@@ -33,7 +34,8 @@ class Filtres:
     date_situation: Optional[date]
     nature: Optional[str] = None
     section: Optional[str] = None
-    paiement: str = "ajuste"
+    # Payé enregistré dans la Chaîne Dépense (« brut ») par défaut, décision du 21/11/2026 ; « ajuste » sur demande.
+    paiement: str = "brut"
     criteres: dict = field(default_factory=dict)
 
     @property
@@ -74,14 +76,17 @@ def dernieres_situations(source_code: str) -> list[tuple[int, date]]:
                ORDER BY a.exercice DESC, a.date_situation DESC""",
             [source_code],
         )
-        return c.fetchall()
+        situations = c.fetchall()
+        if settings.TDB_EXERCICE_TEST:
+            situations = [(e, d) for e, d in situations if e == settings.TDB_EXERCICE_TEST]
+        return situations
 
 
 def resoudre_filtres(params, source_code: str) -> Filtres:
     nature = params.get("nature") or None
     if nature and nature not in NATURE_VERS_TITRE:
         raise ValidationError({"nature": f"Valeurs admises : {', '.join(NATURE_VERS_TITRE)}"})
-    paiement = params.get("paiement") or "ajuste"
+    paiement = params.get("paiement") or "brut"
     if paiement not in ("ajuste", "brut"):
         raise ValidationError({"paiement": "Valeurs admises : ajuste, brut"})
     try:
@@ -91,6 +96,10 @@ def resoudre_filtres(params, source_code: str) -> Filtres:
         raise ValidationError({"detail": f"Paramètre invalide : {exc}"}) from exc
 
     situations = dernieres_situations(source_code)
+    if settings.TDB_EXERCICE_TEST:
+        if exercice is not None and exercice != settings.TDB_EXERCICE_TEST:
+            raise ValidationError({"exercice": f"Test limité à l'exercice {settings.TDB_EXERCICE_TEST}."})
+        exercice = settings.TDB_EXERCICE_TEST
     if exercice is None and situations:
         exercice = situations[0][0]
     if date_situation is None:

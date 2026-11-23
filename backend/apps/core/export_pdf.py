@@ -40,6 +40,15 @@ from .models import JournalAudit
 from .permissions import DoubleAuthentification
 from .reponses import masquer_disponible, meta
 
+# Crédit imposé par la licence des armoiries provisoires : dans les propriétés du PDF, pas en pied de page.
+CREDIT_ARMOIRIES = "Armoiries : Turn685 d'après Ttzavaras / Wikimedia Commons - CC BY-SA 3.0. Adaptation PNG."
+
+
+def mention_droits() -> str:
+    """Mention de droits des documents produits, avec l'année courante."""
+    return f"© {timezone.localdate().year} SMSI - Tous droits réservés"
+
+
 # Couleurs de frontend/src/theme/tokens.css ; aucune couleur d'état utilisée pour une donnée.
 NAVY = colors.HexColor("#16314e")
 GOLD = colors.HexColor("#b8860b")
@@ -214,6 +223,7 @@ class DocumentPdf(BaseDocTemplate):
             bottomMargin=51,
             title=_texte(titre),
             author="MEFB - République de Guinée",
+            keywords=CREDIT_ARMOIRIES,
             allowSplitting=True,
         )
         cadre = Frame(MARGIN, 51, WIDTH, PAGE[1] - 147, leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0)
@@ -244,9 +254,7 @@ class DocumentPdf(BaseDocTemplate):
         canvas.drawString(MARGIN, 31, "Document de travail - diffusion restreinte | " + _texte(self.titre_rapport))
         canvas.drawRightString(w - MARGIN, 31, f"Page {doc.page}")
         canvas.setFont("Tdb", 6)
-        canvas.drawString(
-            MARGIN, 18, "Armoiries : Turn685 d'après Ttzavaras / Wikimedia Commons - CC BY-SA 3.0. Adaptation PNG."
-        )
+        canvas.drawString(MARGIN, 18, mention_droits())
         canvas.drawRightString(w - MARGIN, 18, "Généré le " + self.genere_le)
         canvas.restoreState()
 

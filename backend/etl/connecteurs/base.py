@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Optional
 
 import pandas as pd
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
@@ -145,9 +146,11 @@ class BaseConnector(ABC):
         )
         debut = time.monotonic()
         try:
+            self._verifier_exercice_test()
             self.donnees = self.extract()
             chargement.exercice = self.exercice
             chargement.date_situation = self.date_situation
+            self._verifier_exercice_test()
             chargement.lignes_lues = sum(len(df) for df in self.donnees.values())
             self.rapport = self.validate()
             if not self.rapport.valide:
@@ -208,6 +211,11 @@ class BaseConnector(ABC):
             Chargement.objects.filter(source=source, detail__demo=True).delete()
             self.apres_chargement(chargement)
         return chargement
+
+    def _verifier_exercice_test(self) -> None:
+        exercice = settings.TDB_EXERCICE_TEST
+        if exercice and self.exercice is not None and self.exercice != exercice:
+            raise ErreurChargement(f"Test limité à l'exercice {exercice} : chargement refusé pour {self.exercice}.")
 
     def _enregistrer_controles(self, chargement: Chargement) -> None:
         from apps.qualite.models import ResultatControle

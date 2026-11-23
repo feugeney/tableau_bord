@@ -296,6 +296,9 @@ class ChaineDepenseMixin:
     source_code = "chaine_depense"
     cle_ligne = CLE_LIGNE
     niveau_concordance = "bloquant"
+    # Faux pour une source qui ne fournit que la situation budgétaire (ex. SIDOF, vue vm_lbudg) : pas de liste
+    # des engagements, donc ni contrôle de concordance ni dossiers, délais, procédures ou bénéficiaires.
+    avec_engagements = True
 
     # ----------------------------------------------------------------- validation
 
@@ -307,6 +310,8 @@ class ChaineDepenseMixin:
         sc = self.donnees.get(ONGLET_SITUATION)
         eng = self.donnees.get(ONGLET_ENGAGEMENTS)
         for onglet, requis in OBLIGATOIRES.items():
+            if onglet == ONGLET_ENGAGEMENTS and not self.avec_engagements:
+                continue
             df = self.donnees.get(onglet)
             if df is None:
                 if requis:
@@ -355,6 +360,19 @@ class ChaineDepenseMixin:
                     "structure_apad", "Structure et valeurs APAD", "bloquant", False, detail={"message": str(exc)}
                 )
 
+        if not self.avec_engagements:
+            rapport.ajouter(
+                "liste_engagements",
+                "Liste des engagements",
+                "info",
+                True,
+                detail={
+                    "message": "non fournie par cette source : délais de visa, procédures, bénéficiaires et "
+                    "dossiers d'arbitrage ne sont pas alimentés par ce chargement"
+                },
+            )
+            return self._controles_situation(rapport, sc, None)
+
         # Concordance bloquante : total engagé « Situation courante » = « Liste des engagements ».
         total_sc = sum((n.montant_ou_zero(v) for v in sc["credit_engage"]), Decimal(0))
         eng_comparables = getattr(self, "_engagements_concordance", eng)
@@ -375,7 +393,10 @@ class ChaineDepenseMixin:
             },
         )
 
-        # Contrôles non bloquants.
+        return self._controles_situation(rapport, sc, eng)
+
+    def _controles_situation(self, rapport: RapportValidation, sc, eng) -> RapportValidation:
+        """Contrôles non bloquants ; ceux portant sur les engagements seulement si la liste est fournie."""
         cles = sc[self.cle_ligne].apply(lambda r: _hash(n.code(v) for v in r), axis=1)
         doublons = int(cles.duplicated(keep=False).sum())
         rapport.ajouter(
@@ -414,22 +435,24 @@ class ChaineDepenseMixin:
             sans_section == 0,
             nombre=sans_section,
         )
-        doublons_num = int(
-            eng.assign(_s=eng["section"].map(n.code), _n=eng["numero"].map(n.code))
-            .duplicated(["_s", "_n"], keep=False)
-            .sum()
-        )
-        rapport.ajouter(
-            "numero_engagement_non_unique",
-            "Engagements partageant numéro et section",
-            "info",
-            True,
-            nombre=doublons_num,
-            detail={"message": "clé technique utilisée ; clé métier à confirmer"},
-        )
+        if eng is not None:
+            doublons_num = int(
+                eng.assign(_s=eng["section"].map(n.code), _n=eng["numero"].map(n.code))
+                .duplicated(["_s", "_n"], keep=False)
+                .sum()
+            )
+            rapport.ajouter(
+                "numero_engagement_non_unique",
+                "Engagements partageant numéro et section",
+                "info",
+                True,
+                nombre=doublons_num,
+                detail={"message": "clé technique utilisée ; clé métier à confirmer"},
+            )
         codes_numeriques = sum(
             int(df[c].map(lambda v: isinstance(v, (int, float)) and not isinstance(v, bool)).sum())
             for df in (sc, eng)
+            if df is not None
             for c in ("section", "sous_section", "titre")
             if c in df.columns
         )
@@ -450,7 +473,8 @@ class ChaineDepenseMixin:
         self._charger_referentiels()
         total = 0
         total += self._charger_situation(chargement)
-        total += self._charger_engagements(chargement, ONGLET_ENGAGEMENTS, FaitEngagement)
+        if self.avec_engagements:
+            total += self._charger_engagements(chargement, ONGLET_ENGAGEMENTS, FaitEngagement)
         if ONGLET_OPERATIONS in self.donnees:
             total += self._charger_engagements(chargement, ONGLET_OPERATIONS, FaitOperation)
         if ONGLET_REGIE in self.donnees:

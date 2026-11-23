@@ -49,6 +49,11 @@ export interface Alerte {
   action_recommandee: string;
   lien: string;
   statut: "nouvelle" | "vue" | "traitee";
+  regle_code?: string | null;
+  /** Alertes par dossier (arbitrages) : titre, ministère, acteur, montant (GNF, texte), jours… */
+  donnees?: Record<string, string | number | null>;
+  notifiee_le?: string | null;
+  relancee_le?: string | null;
 }
 
 export interface Source {
@@ -222,6 +227,29 @@ export interface Nature {
   taux_engagement: number | null;
   empile: { paye: number; ordonnance_non_paye: number; engage_non_ordonnance: number; disponible: number };
   reste_a_payer: number;
+}
+
+/** Voyant des acteurs de la fiche d'un titre (note à la Ministre). */
+export type Voyant = "bon" | "vigilance" | "critique";
+
+/** Fiche d'un titre (vue 2). */
+export interface FicheTitre {
+  titre: string;
+  libelle_titre: string;
+  paiement_suivi: boolean;
+  chaine: { code: string; libelle: string; montant: number | null; taux: number | null }[];
+  ministeres: {
+    code: string;
+    libelle: string;
+    credit_actuel: number;
+    credit_engage: number;
+    montant_paye: number;
+    taux_engagement: number | null;
+    taux_paiement: number | null;
+  }[];
+  nb_ministeres: number;
+  acteurs: { code: string; acteur: string; voyant: Voyant | null; texte: string; raccorde?: boolean }[];
+  alertes: { severite: Severite; texte: string }[];
 }
 
 export interface StatutMinistere {

@@ -4,4 +4,6 @@ export const PLATEFORME = {
   nomCourt: "Pilotage des finances publiques",
   ministere: "Ministère de l'Économie, des Finances et du Budget",
   devise: "Travail · Justice · Solidarité",
+  /** Mention de droits en pied de page, des PDF et des courriels (l'année est ajoutée à l'affichage). */
+  droits: "SMSI · Tous droits réservés",
 } as const;

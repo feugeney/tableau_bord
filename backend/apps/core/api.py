@@ -294,6 +294,7 @@ class SourceViewSet(viewsets.ReadOnlyModelViewSet):
 class AlerteSerializer(serializers.ModelSerializer):
     source = serializers.CharField(source="source.application", default=None)
     source_code = serializers.CharField(source="source.code", default=None)
+    regle_code = serializers.CharField(source="regle.code", default=None)
 
     class Meta:
         model = Alerte
@@ -303,6 +304,7 @@ class AlerteSerializer(serializers.ModelSerializer):
             "domaine",
             "source",
             "source_code",
+            "regle_code",
             "date_situation",
             "severite",
             "titre",
@@ -311,6 +313,9 @@ class AlerteSerializer(serializers.ModelSerializer):
             "action_recommandee",
             "lien",
             "statut",
+            "donnees",
+            "notifiee_le",
+            "relancee_le",
         ]
         read_only_fields = [f for f in fields if f != "statut"]
 
@@ -324,7 +329,7 @@ class AlerteViewSet(mixins.ListModelMixin, mixins.UpdateModelMixin, viewsets.Gen
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False):
             return Alerte.objects.none()
-        qs = Alerte.objects.select_related("source")
+        qs = Alerte.objects.select_related("source", "regle")
         u = self.request.user
         if not u.voit_tout():
             qs = qs.filter(domaine__in=[d for d in Domaine.values if d != "synthese" and u.peut_voir(d)])
@@ -332,6 +337,8 @@ class AlerteViewSet(mixins.ListModelMixin, mixins.UpdateModelMixin, viewsets.Gen
         for champ in ("domaine", "severite", "statut"):
             if p.get(champ):
                 qs = qs.filter(**{f"{champ}__in": p[champ].split(",")})
+        if p.get("regle"):
+            qs = qs.filter(regle__code__in=p["regle"].split(","))
         return qs
 
     def list(self, request, *args, **kwargs):
@@ -344,6 +351,30 @@ class AlerteViewSet(mixins.ListModelMixin, mixins.UpdateModelMixin, viewsets.Gen
         a = serializer.save(statut_modifie_par=self.request.user)
         invalider_cache_api()  # la synthèse affiche le statut des alertes
         journaliser(self.request, JournalAudit.Action.ALERTE, objet=f"alerte {a.id}", detail={"statut": a.statut})
+
+    @extend_schema(responses={(200, "application/pdf"): OpenApiTypes.BINARY})
+    @action(detail=True, methods=["get"], url_path="fiche-pdf")
+    def fiche_pdf(self, request, pk=None):
+        """Fiche de suivi d'un dossier en PDF structuré (A4 portrait, charte des rapports)."""
+        from django.http import HttpResponse
+        from rest_framework.exceptions import NotFound, PermissionDenied
+
+        from .fiche_dossier_pdf import creer_fiche_dossier_pdf
+
+        a = self.get_object()  # mêmes restrictions de domaine que la liste des alertes
+        numero = str((a.donnees or {}).get("numero") or "").strip()
+        if not numero:
+            raise NotFound("Fiche PDF disponible pour les alertes portant sur un dossier.")
+        u = request.user
+        if not (u.voit_tout() or u.peut_exporter(a.domaine)):
+            raise PermissionDenied("Votre profil ne permet pas l'export de cette fiche.")
+        contenu = creer_fiche_dossier_pdf(a, u.get_username())
+        journaliser(request, JournalAudit.Action.EXPORT, objet=f"fiche dossier {numero}.pdf", detail={"alerte": a.id})
+        reponse = HttpResponse(contenu, content_type="application/pdf")
+        nom = "".join(c if c.isalnum() or c in "-_" else "-" for c in numero)
+        reponse["Content-Disposition"] = f'attachment; filename="fiche-dossier-{nom}.pdf"'
+        reponse["Cache-Control"] = "private, no-store"
+        return reponse
 
 
 # ------------------------------------------------------------------ qualité

@@ -12,6 +12,11 @@ describe("formats français", () => {
     expect(pct(0.7096)).toBe(`71${F}%`);
     expect(pct(null)).toBe("—");
   });
+  it("conserve les faibles taux financiers avec une décimale sans convertir une absence en zéro", () => {
+    expect(pct(0.003, 1)).toBe(`0,3${F}%`);
+    expect(pct(942 / 2825, 1)).toBe(`33,3${F}%`);
+    expect(pct(null, 1)).toBe("—");
+  });
   it("groupe les milliers", () => {
     expect(nombre(13426)).toBe(`13${F}426`);
   });

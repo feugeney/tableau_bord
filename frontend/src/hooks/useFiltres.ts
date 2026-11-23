@@ -38,7 +38,8 @@ export function useFiltres() {
       date_situation: params.get("date_situation") ?? undefined,
       nature: (params.get("nature") ?? "") as Nature,
       section: params.get("section") ?? undefined,
-      paiement: (params.get("paiement") as ModePaiement) || "ajuste",
+      // Paiement de la Chaîne Dépense par défaut ; « ajuste » ne reste accessible que par l'adresse.
+      paiement: (params.get("paiement") as ModePaiement) || "brut",
       mode_synthese: (params.get("mode_synthese") as Filtres["mode_synthese"]) || undefined,
       criteres: Object.fromEntries(
         CRITERES.map((c) => [c, (params.get(c) ?? "").split(",").filter(Boolean)]).filter(
@@ -71,7 +72,7 @@ export function useFiltres() {
         (avant) => {
           const suivant = new URLSearchParams(avant);
           Object.entries(maj).forEach(([k, v]) => {
-            const defaut = (k === "paiement" && v === "ajuste") || v === "" || v === undefined;
+            const defaut = (k === "paiement" && v === "brut") || v === "" || v === undefined;
             if (defaut) suivant.delete(k);
             else suivant.set(k, String(v));
           });

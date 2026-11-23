@@ -52,3 +52,32 @@ def test_exercice_precedent_a_la_meme_date(charge, tmp_path):
         "taux_paiement",
     }
     assert any(p["n1"] is not None for p in courbe(f)["points"])
+
+
+def test_courbe_bornee_a_la_date_et_ecart_visible(charge):
+    from etl.mart import rafraichir_vues
+
+    charge.date_situation = date(2025, 9, 15)
+    charge.save(update_fields=["date_situation"])
+    FaitSituationLigne.objects.filter(chargement=charge).update(date_situation=charge.date_situation)
+    FaitEngagement.objects.filter(chargement=charge).update(date_situation=charge.date_situation)
+    rafraichir_vues()
+    f = resoudre_filtres({}, "chaine_depense")
+    # Le même mois contient des créations avant et après la situation.
+    dossiers = FaitEngagement.objects.filter(chargement=charge)
+    dossiers.update(date_creation=date(2025, 9, 20))
+    premier = dossiers.first()
+    dossiers.filter(pk=premier.pk).update(date_creation=date(2025, 9, 10))
+    c = courbe(f)
+    credits = sum(l.credit_actuel for l in FaitSituationLigne.objects.filter(chargement=charge))
+    assert c["engage_serie"] == premier.montant_engage
+    assert c["points"][8]["n"] == premier.montant_engage / credits
+    assert all(p["n"] is None for p in c["points"][9:])
+    assert c["concordant"] == (c["engage_serie"] == c["engage_situation"])
+
+
+def test_courbe_sans_dates_ne_fabrique_pas_un_taux_nul(charge):
+    FaitEngagement.objects.filter(chargement=charge).update(date_creation=None)
+    c = courbe(resoudre_filtres({}, "chaine_depense"))
+    assert all(p["n"] is None for p in c["points"])
+    assert c["concordant"] is False

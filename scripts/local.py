@@ -131,10 +131,22 @@ def commande(arguments, **options):
     )
 
 
+def serveur_existant(conf):
+    """Vrai quand la base est sur un PostgreSQL deja installe (ex. service Windows du port 5432, visible
+    dans pgAdmin) : le projet ne cree, ne demarre et n'arrete alors aucune instance PostgreSQL."""
+    return conf.get("LOCAL_PG_SERVEUR_EXISTANT", "").strip().lower() in ("1", "true", "oui", "yes")
+
+
 def assurer_base(conf):
     import psycopg
     from psycopg import sql
 
+    if not serveur_existant(conf):
+        demarrer_instance_projet(conf)
+    connecter_base(conf, psycopg, sql)
+
+
+def demarrer_instance_projet(conf):
     donnees, binaires = dossier_pg(conf), binaires_pg(conf)
     if not (donnees / "PG_VERSION").exists():
         donnees.parent.mkdir(parents=True, exist_ok=True)
@@ -184,6 +196,9 @@ def assurer_base(conf):
             ],
             stdout=subprocess.DEVNULL,
         )
+
+
+def connecter_base(conf, psycopg, sql):
     connexion = {
         "host": conf["POSTGRES_HOST"],
         "port": conf["POSTGRES_PORT"],
@@ -412,7 +427,7 @@ def arreter(conf):
                 "Le processus du port 8000 n'a pas ete reconnu comme celui de ce projet."
             )
     donnees = dossier_pg(conf)
-    if (donnees / "PG_VERSION").exists():
+    if not serveur_existant(conf) and (donnees / "PG_VERSION").exists():
         statut = subprocess.run(
             [str(binaires_pg(conf) / "pg_ctl.exe"), "status", "-D", str(donnees)],
             capture_output=True,
@@ -434,7 +449,9 @@ def arreter(conf):
             )
     (ETAT / "services.json").unlink(missing_ok=True)
     print(
-        "Application et instance PostgreSQL du projet arretees. Les donnees sont conservees."
+        "Application arretee ; serveur PostgreSQL existant laisse en marche."
+        if serveur_existant(conf)
+        else "Application et instance PostgreSQL du projet arretees. Les donnees sont conservees."
     )
 
 

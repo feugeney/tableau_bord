@@ -9,8 +9,9 @@ const fichiers = import.meta.glob<string>("../../assets/armoiries.{svg,png}", {
 });
 const ARMOIRIES: string | undefined = Object.values(fichiers)[0];
 
-/** Mention obligatoire tant que le fichier provisoire (Wikimedia Commons, CC BY-SA 3.0) est en place.
- *  À vider lorsque le fichier officiel fourni par le ministère le remplace (voir src/assets/LISEZMOI.md). */
+/** Crédit imposé par la licence du fichier provisoire (Wikimedia Commons, CC BY-SA 3.0). Depuis le 23/11/2026,
+ *  il n'est plus écrit en pied de page : il figure dans l'infobulle des armoiries (et dans les propriétés des
+ *  PDF côté serveur). À vider lorsque le fichier officiel fourni par le ministère le remplace. */
 export const CREDIT_ARMOIRIES =
   "Armoiries : version Wikimedia Commons (Turn685, d'après Ttzavaras), licence CC BY-SA 3.0";
 
@@ -23,6 +24,7 @@ export function Armoiries({ taille = 56, className }: { taille?: number; classNa
         height={taille}
         style={{ width: taille, height: taille }}
         alt="Armoiries de la République de Guinée"
+        title={CREDIT_ARMOIRIES || undefined}
         className={cn("shrink-0 object-contain", className)}
       />
     );

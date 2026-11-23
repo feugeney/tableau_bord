@@ -66,6 +66,14 @@ def relever_depots() -> list[dict]:
     return relever()
 
 
+@shared_task(name="etl.notifier_alertes")
+def notifier_alertes_task() -> dict:
+    """Courriels des alertes non encore notifiées (reprise après panne de messagerie), puis relances."""
+    from apps.core.notifications import notifier_nouvelles_alertes, relancer_alertes
+
+    return {"notifiees": notifier_nouvelles_alertes(), "relancees": relancer_alertes()}
+
+
 @shared_task(name="etl.evaluer_alertes")
 def evaluer_alertes_task(domaine: str | None = None) -> int:
     from apps.core.alertes import evaluer_alertes

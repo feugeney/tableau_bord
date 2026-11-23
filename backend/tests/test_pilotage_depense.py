@@ -141,7 +141,9 @@ def test_apad_complement_par_empreinte_idempotent_et_sans_double_compte(classeur
     assert FaitAPAD.objects.filter(chargement=ch).count() == 1
     # Simule un import historique qui n'exploitait pas encore la feuille APAD.
     FaitAPAD.objects.filter(chargement=ch).delete()
-    avant = list(FaitSituationLigne.objects.filter(chargement=ch).values_list("credit_engage", "montant_paye"))
+    avant = list(
+        FaitSituationLigne.objects.filter(chargement=ch).order_by("pk").values_list("credit_engage", "montant_paye")
+    )
     sortie = StringIO()
     args = {"chargement": ch.pk, "fichier": str(classeur), "stdout": sortie}
     call_command("completer_details_depense", apercu=True, **args)
@@ -149,7 +151,12 @@ def test_apad_complement_par_empreinte_idempotent_et_sans_double_compte(classeur
     call_command("completer_details_depense", **args)
     call_command("completer_details_depense", **args)
     assert FaitAPAD.objects.filter(chargement=ch).count() == 1
-    assert list(FaitSituationLigne.objects.filter(chargement=ch).values_list("credit_engage", "montant_paye")) == avant
+    assert (
+        list(
+            FaitSituationLigne.objects.filter(chargement=ch).order_by("pk").values_list("credit_engage", "montant_paye")
+        )
+        == avant
+    )
     d = page(Filtres(ch.exercice, ch.date_situation))
     assert d["apad"]["avance_demarrage"] == 42
     assert d["apad"]["nb_marches"] == 1

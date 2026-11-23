@@ -140,22 +140,41 @@ def synchroniser_flux(flux):
     )
 
 
+PROFILS_ORACLE = ("oracle_chaine_depense", "oracle_plan_engagement")
+
+
 def executer_flux(flux, apercu=False, utilisateur=None, exception_horaire_ponctuelle=False, declenchement="manuel"):
     from etl.connecteurs.chaine_depense import OracleChaineDepenseConnector
+    from etl.connecteurs.plan_engagement import PlanEngagementConnector
+    from etl.connecteurs.sidof import SidofLignesBudgetairesConnector
     from etl.connecteurs.sysop import SysopPortefeuilleConnector
 
     if not apercu and not flux.actif:
         raise ValidationError("Ce flux est désactivé.")
+    # Profil → (source attendue, connecteur attendu de la source). Le plan d'engagement lit la même base
+    # Oracle que la Chaîne Dépense (connexion de backend/.env) : sa source n'a pas de connecteur propre, pour
+    # qu'aucune planification nocturne « par source » ne lui applique le connecteur de la Chaîne Dépense.
     profils = {
         "sysop_portefeuille": ("sysop", "postgres"),
         "oracle_chaine_depense": ("chaine_depense", "oracle_chaine_depense"),
+        "oracle_plan_engagement": ("plan_engagement", None),
+        # Lignes budgétaires de la Chaîne Dépense par l'API SIDOF : chargées dans la source Chaîne Dépense
+        # (pages Dépenses), quel que soit le connecteur Oracle ou Excel configuré pour cette source.
+        "sidof_lignes_budgetaires": ("chaine_depense", None),
     }
     if flux.profil not in profils or flux.source.code != profils[flux.profil][0]:
         raise ValidationError("Ce profil ne dispose pas encore d'un connecteur validé.")
-    if flux.source.connecteur != profils[flux.profil][1]:
+    attendu = profils[flux.profil][1]
+    if attendu is not None and flux.source.connecteur != attendu:
         raise ValidationError("Le connecteur de la source ne correspond pas au profil ETL. Vérifier la connexion.")
-    if exception_horaire_ponctuelle and flux.profil != "oracle_chaine_depense":
-        raise ValidationError("L'exception horaire ne concerne que la Chaîne Dépense Oracle.")
+    if flux.profil == "oracle_plan_engagement" and not settings.SOURCES_EXTERNES["chaine_depense_oracle"]["dsn"]:
+        raise ValidationError(
+            "Connexion Oracle de la Chaîne Dépense non configurée (CHAINE_DEPENSE_ORACLE_DSN dans backend/.env)."
+        )
+    if flux.profil == "sidof_lignes_budgetaires" and not settings.SOURCES_EXTERNES["sidof"]["cle"]:
+        raise ValidationError("Clé de l'API SIDOF non configurée (SIDOF_API_KEY dans backend/.env).")
+    if exception_horaire_ponctuelle and flux.profil not in PROFILS_ORACLE:
+        raise ValidationError("L'exception horaire ne concerne que les flux Oracle de la Chaîne Dépense.")
     # Verrou partagé entre processus et flux visant la même source et le même exercice.
     with connection.cursor() as cursor:
         cursor.execute("SELECT pg_try_advisory_lock(%s, %s)", [flux.source_id, flux.exercice])
@@ -163,15 +182,23 @@ def executer_flux(flux, apercu=False, utilisateur=None, exception_horaire_ponctu
             raise ValidationError("Une exécution est déjà en cours pour cette source et cet exercice.")
     try:
         commun = dict(exercice=flux.exercice, date_situation=timezone.localdate(), utilisateur=utilisateur)
-        connecteur = (
-            OracleChaineDepenseConnector(
+        if flux.profil == "oracle_chaine_depense":
+            connecteur = OracleChaineDepenseConnector(
                 configuration=flux.source.configuration,
                 exception_ponctuelle=exception_horaire_ponctuelle,
                 **commun,
             )
-            if flux.profil == "oracle_chaine_depense"
-            else SysopPortefeuilleConnector(**commun)
-        )
+        elif flux.profil == "sidof_lignes_budgetaires":
+            # Date de situation : dernière mise à jour des lignes dans SIDOF, pas la date du jour.
+            connecteur = SidofLignesBudgetairesConnector(exercice=flux.exercice, utilisateur=utilisateur)
+        elif flux.profil == "oracle_plan_engagement":
+            connecteur = PlanEngagementConnector(
+                replique=bool((flux.source.configuration or {}).get("replique", False)),
+                exception_ponctuelle=exception_horaire_ponctuelle,
+                **commun,
+            )
+        else:
+            connecteur = SysopPortefeuilleConnector(**commun)
         ch = connecteur.executer(apercu=apercu)
         ch.detail = {**ch.detail, "flux_etl": flux.code, "declenchement": declenchement}
         ch.save(update_fields=["detail"])
@@ -285,7 +312,7 @@ class FluxSerializer(serializers.ModelSerializer):
             settings.ORACLE_RESTRICTION_HEURES_OUVREES
             and flux is not None
             and cron
-            and flux.profil == "oracle_chaine_depense"
+            and flux.profil in PROFILS_ORACLE
             and not (flux.source.configuration or {}).get("replique", False)
             and OracleChaineDepenseConnector.programmation_en_heures_ouvrees(cron)
         ):
@@ -297,6 +324,8 @@ class FluxSerializer(serializers.ModelSerializer):
         return attrs
 
     def validate_exercice(self, valeur):
+        if settings.TDB_EXERCICE_TEST and valeur != settings.TDB_EXERCICE_TEST:
+            raise ValidationError(f"Test limité à l'exercice {settings.TDB_EXERCICE_TEST}.")
         if not 2000 <= valeur <= timezone.localdate().year:
             raise ValidationError("Exercice compris entre 2000 et l'année courante attendu.")
         return valeur

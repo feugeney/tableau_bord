@@ -96,13 +96,16 @@ def comparaison_n1(f: Filtres) -> dict:
 def courbe(f: Filtres) -> dict:
     """Engagé cumulé en % des crédits, mois par mois : exercice courant, exercice précédent, prorata temporel."""
     i = indicateurs(f)
-    mois_n = {r["mois"]: r["engage"] for r in _engage_par_mois(f)}
+    mois_n = {r["mois"]: r["engage"] for r in _engage_par_mois(f, jusqu_au=f.date_situation)}
     fp = _filtres_n1(f)
     mois_n1, credit_n1 = {}, None
     if fp:
-        mois_n1 = {r["mois"]: r["engage"] for r in _engage_par_mois(fp)}
+        mois_n1 = {r["mois"]: r["engage"] for r in _engage_par_mois(fp, jusqu_au=fp.date_situation)}
         credit_n1 = indicateurs(fp)["credit_actuel"]
     dernier = f.date_situation.month if f.date_situation and f.date_situation.year == f.exercice else 12
+    if f.date_situation and f.date_situation.year < f.exercice:
+        dernier = 0
+    dernier_n1 = fp.date_situation.month if fp and fp.date_situation and fp.date_situation.year == fp.exercice else 12
     points, cumul_n, cumul_n1 = [], D0, D0
     for m in MOIS:
         cumul_n += mois_n.get(m, D0)
@@ -111,19 +114,24 @@ def courbe(f: Filtres) -> dict:
             {
                 "mois": m,
                 # Au-delà du mois de situation, l'exercice courant n'est pas encore connu.
-                "n": regles.taux(cumul_n, i["credit_actuel"]) if m <= dernier else None,
-                "n1": regles.taux(cumul_n1, credit_n1) if fp else None,
+                "n": regles.taux(cumul_n, i["credit_actuel"]) if mois_n and m <= dernier else None,
+                "n1": regles.taux(cumul_n1, credit_n1) if mois_n1 and m <= dernier_n1 else None,
                 "prorata": Decimal(m) / 12,
             }
         )
     return {
         "exercice": f.exercice,
         "exercice_precedent": fp.exercice if fp else None,
+        "date_situation": f.date_situation,
         "points": points,
+        "concordant": sum(mois_n.values(), D0) == i["credit_engage"],
         "engage_serie": sum(mois_n.values(), D0),
         "engage_situation": i["credit_engage"],
         "methode": (
             "Engagements cumulés par mois de création, rapportés aux crédits actuels de chaque exercice. "
+            "Le dernier mois est arrêté à la date de situation ; les mois futurs restent vides. "
+            "La série précédente est bornée à sa propre date de situation. "
+            "Les dossiers sans date ou créés hors exercice sont exclus de la courbe. "
             "Le prorata temporel est un simple repère visuel, pas un objectif."
         ),
     }

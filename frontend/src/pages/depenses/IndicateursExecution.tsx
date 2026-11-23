@@ -1,15 +1,11 @@
 import type { ComparaisonN1, IndicateursDepense } from "@/api/types";
-import { BandeauKpi, KpiCard } from "@/components/Indicateurs";
-import { Montant, Pourcentage } from "@/components/Montant";
+import { KpiCard } from "@/components/Indicateurs";
+import { Montant } from "@/components/Montant";
 import { dateFr, pct } from "@/lib/format";
 
 import { EcartN1 } from "./analyses";
 
-/**
- * Les six cadres de l'exécution de la dépense : crédits, puis chaque taux rapporté à l'étape précédente
- * (montants bruts), avec l'exercice précédent comme repère. Partagé par les pages Dépenses et Synthèse
- * pour que leurs architectures restent identiques.
- */
+/** Chaque taux suit la chaîne : crédits → engagé → liquidé → ordonnancé → vu bon à payer → payé. */
 export function IndicateursExecution({
   i,
   n1,
@@ -17,105 +13,108 @@ export function IndicateursExecution({
   i: IndicateursDepense;
   n1: ComparaisonN1 | null | undefined;
 }) {
+  const etapes = [
+    {
+      libelle: "Engagé",
+      montant: i.credit_engage,
+      taux: i.taux_engagement,
+      base: "des crédits actuels",
+      formule: "Engagé / crédits actuels",
+    },
+    {
+      libelle: "Liquidé",
+      montant: i.montant_liquide,
+      taux: i.taux_liquidation,
+      base: "de l’engagé",
+      formule: "Liquidé / engagé",
+    },
+    {
+      libelle: "Ordonnancé",
+      montant: i.montant_ordonnance,
+      taux: i.taux_ordonnancement,
+      base: "du liquidé",
+      formule: "Ordonnancé / liquidé",
+    },
+    {
+      libelle: "Vu bon à payer",
+      montant: i.montant_vbp,
+      taux: i.taux_vbp,
+      base: "de l’ordonnancé",
+      formule: "Vu bon à payer / ordonnancé",
+    },
+    {
+      libelle: "Payé enregistré",
+      montant: i.montant_paye,
+      taux: i.taux_paiement,
+      base: "de l’ordonnancé",
+      formule: "Payé enregistré / ordonnancé",
+    },
+  ];
+  const passages: { libelle: string; taux: number | null }[] = [
+    { libelle: "Liquidé / engagé", taux: i.taux_liquidation },
+    { libelle: "Ordonnancé / liquidé", taux: i.taux_ordonnancement },
+    { libelle: "Vu bon à payer / ordonnancé", taux: i.taux_vbp },
+    { libelle: "Payé enregistré / ordonnancé", taux: i.taux_paiement },
+  ];
   return (
-    <BandeauKpi>
-      <KpiCard
-        libelle="Crédits actuels"
-        valeur={<Montant gnf={i.credit_actuel} />}
-        contexte={
-          <>
-            LFI <Montant gnf={i.credit_initial_lfi} /> ·{" "}
-            {i.variation_lfi != null && i.variation_lfi >= 0 ? "+" : ""}
-            {pct(i.variation_lfi)}
-          </>
-        }
-      />
-      <KpiCard
-        libelle="Taux d'engagement"
-        valeur={<Pourcentage ratio={i.taux_engagement} />}
-        contexte={
-          <>
-            <Montant gnf={i.credit_engage} /> engagés sur les crédits
-          </>
-        }
-        jauge={{ valeur: i.taux_engagement }}
-        pied={
-          <EcartN1
-            taux={i.taux_engagement}
-            reference={n1?.taux_engagement}
-            libelle={`${n1?.exercice} au ${dateFr(n1?.date)}`}
+    <div className="flex flex-col gap-3">
+      <p className="text-sm text-ink-2">
+        Montants en milliards de GNF · engagé sur crédits actuels, liquidé sur engagé, ordonnancé sur liquidé
+        et vu bon à payer et payé sur ordonnancé.
+      </p>
+      <div className="grid grid-cols-1 gap-px overflow-hidden rounded border border-border bg-border sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 print:grid-cols-6">
+        <KpiCard
+          libelle="Crédits actuels"
+          valeur={<Montant gnf={i.credit_actuel} />}
+          contexte={
+            <>
+              LFI <Montant gnf={i.credit_initial_lfi} /> ·{" "}
+              {i.variation_lfi != null && i.variation_lfi >= 0 ? "+" : ""}
+              {pct(i.variation_lfi)}
+            </>
+          }
+        />
+        {etapes.map((e) => (
+          <KpiCard
+            key={e.libelle}
+            libelle={e.libelle}
+            valeur={<Montant gnf={e.montant} />}
+            contexte={`${pct(e.taux, 1)} ${e.base}`}
+            jauge={e.taux == null ? undefined : { valeur: e.taux }}
+            aide={
+              e.libelle === "Payé enregistré"
+                ? `${e.formule} × 100. Paiements bruts enregistrés dans la Chaîne Dépense. Les paiements hors chaîne peuvent être incomplets ; ce montant ne certifie pas le total payé par le Trésor.`
+                : `${e.formule} × 100.`
+            }
+            pied={
+              e.libelle === "Engagé" && n1?.disponible ? (
+                <EcartN1
+                  taux={e.taux}
+                  reference={n1.taux_engagement}
+                  libelle={`${n1.exercice} au ${dateFr(n1.date)}`}
+                />
+              ) : undefined
+            }
           />
-        }
-        aide="Engagé / crédits actuels."
-      />
-      <KpiCard
-        libelle="Taux de liquidation"
-        valeur={<Pourcentage ratio={i.taux_liquidation} />}
-        contexte={
-          <>
-            <Montant gnf={i.montant_liquide} /> liquidés sur l'engagé
-          </>
-        }
-        jauge={{ valeur: i.taux_liquidation }}
-        pied={
-          <EcartN1
-            taux={i.taux_liquidation}
-            reference={n1?.cloture?.taux_liquidation}
-            libelle={`Clôture ${n1?.exercice}`}
-          />
-        }
-        aide={`Liquidé / engagé. Rapporté aux crédits : ${pct(i.taux_liquidation_sur_credits)}.`}
-      />
-      <KpiCard
-        libelle="Taux d'ordonnancement"
-        valeur={<Pourcentage ratio={i.taux_ordonnancement} />}
-        contexte={
-          <>
-            <Montant gnf={i.montant_ordonnance} /> ordonnancés sur le liquidé
-          </>
-        }
-        jauge={{ valeur: i.taux_ordonnancement }}
-        pied={
-          <EcartN1
-            taux={i.taux_ordonnancement}
-            reference={n1?.cloture?.taux_ordonnancement}
-            libelle={`Clôture ${n1?.exercice}`}
-          />
-        }
-        aide={`Ordonnancé / liquidé. Rapporté aux crédits : ${pct(i.taux_ordonnancement_sur_credits)}.`}
-      />
-      <KpiCard
-        libelle="Taux de VBP"
-        valeur={<Pourcentage ratio={i.taux_vbp} />}
-        contexte={
-          <>
-            <Montant gnf={i.montant_vbp} /> vus bons à payer sur l'ordonnancé
-          </>
-        }
-        jauge={{ valeur: i.taux_vbp }}
-        pied={
-          <EcartN1 taux={i.taux_vbp} reference={n1?.cloture?.taux_vbp} libelle={`Clôture ${n1?.exercice}`} />
-        }
-        aide="Vu bon à payer / ordonnancé. Ce ratio ne mesure pas un montant d'impayés."
-      />
-      <KpiCard
-        libelle="Taux de paiement"
-        valeur={<Pourcentage ratio={i.taux_paiement} />}
-        contexte={
-          <>
-            <Montant gnf={i.montant_paye} /> payés sur l'ordonnancé
-          </>
-        }
-        jauge={{ valeur: i.taux_paiement }}
-        pied={
-          <EcartN1
-            taux={i.taux_paiement}
-            reference={n1?.cloture?.taux_paiement}
-            libelle={`Clôture ${n1?.exercice}`}
-          />
-        }
-        aide={`Payé / ordonnancé, montants bruts (hors chaîne inclus). Rapporté aux crédits : ${pct(i.taux_paiement_sur_credits)}.`}
-      />
-    </BandeauKpi>
+        ))}
+      </div>
+      <details className="rounded border border-border bg-surface p-3">
+        <summary className="cursor-pointer text-sm font-bold text-ink">
+          Comprendre le passage entre les étapes
+        </summary>
+        <dl className="mt-3 grid gap-4 text-sm sm:grid-cols-2 xl:grid-cols-4">
+          {passages.map((p) => (
+            <div key={p.libelle}>
+              <dt className="text-ink-2">{p.libelle}</dt>
+              <dd className="chiffres mt-1 text-lg font-bold text-ink">{pct(p.taux, 1)}</dd>
+            </div>
+          ))}
+        </dl>
+        <p className="mt-3 text-sm text-ink-2">
+          Ratios calculés sur les montants bruts enregistrés. Vu bon à payer : <Montant gnf={i.montant_vbp} />
+          . Les soldes ajustés sont présentés dans l’analyse des restes à payer.
+        </p>
+      </details>
+    </div>
   );
 }

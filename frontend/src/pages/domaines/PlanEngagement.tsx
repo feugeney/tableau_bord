@@ -120,7 +120,7 @@ export default function PlanEngagement() {
       vide={
         <p className="text-base text-ink-2">
           Aucun plan d'engagement chargé. Il provient de la Chaîne Dépense (tables GDEP.TD_PLAN_ENG*) et se
-          charge par la commande <code>import_plan_engagement</code>.
+          charge depuis Administration → Flux ETL → « Oracle · Plan d'engagement ».
         </p>
       }
     >

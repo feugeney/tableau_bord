@@ -12,6 +12,7 @@ environ.Env.read_env(BASE_DIR / ".env", overwrite=False)
 
 SECRET_KEY = env("DJANGO_SECRET_KEY", default="dev-insecure-change-me")
 DEBUG = env.bool("DJANGO_DEBUG", default=False)
+TDB_EXERCICE_TEST = env.int("TDB_EXERCICE_TEST", default=0) or None
 ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
 
 INSTALLED_APPS = [
@@ -108,6 +109,12 @@ SOURCES_EXTERNES = {
     "sysop": {"url": env("SYSOP_DATABASE_URL", default="")},
     # Telemo (marchés publics) : API ; le jeton reste dans l'environnement.
     "telemo": {"url": env("TELEMO_API_URL", default=""), "jeton": env("TELEMO_API_TOKEN", default="")},
+    # SIDOF-ENTREPOT (API, en-tête X-API-Key) : lignes budgétaires de la Chaîne Dépense (vue vm_lbudg).
+    "sidof": {
+        "url": env("SIDOF_API_URL", default="https://sidof-api.mefb.gov.gn"),
+        "cle": env("SIDOF_API_KEY", default=""),
+        "timeout": env.int("SIDOF_API_TIMEOUT", default=120),
+    },
 }
 
 AUTH_USER_MODEL = "core.Utilisateur"
@@ -187,6 +194,27 @@ CELERY_TASK_TRACK_STARTED = True
 CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
 
 OTP_TOTP_ISSUER = "MEFB — Tableau de bord"
+
+# Courriels des alertes (arbitrages de la Ministre, relances). Sans serveur SMTP configuré, les messages
+# sont écrits dans le journal du processus (console) au lieu d'être envoyés.
+EMAIL_HOST = env("EMAIL_HOST", default="")
+EMAIL_BACKEND = env(
+    "EMAIL_BACKEND",
+    default=(
+        "django.core.mail.backends.smtp.EmailBackend"
+        if EMAIL_HOST
+        else "django.core.mail.backends.console.EmailBackend"
+    ),
+)
+EMAIL_PORT = env.int("EMAIL_PORT", default=587)
+EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")
+EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
+EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=True)
+EMAIL_USE_SSL = env.bool("EMAIL_USE_SSL", default=False)
+EMAIL_TIMEOUT = env.int("EMAIL_TIMEOUT", default=30)
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="Tableau de bord <ne-pas-repondre@localhost>")
+# Adresse de l'application, pour les liens des courriels (ex. https://tdb.exemple.gn).
+TDB_URL_PUBLIQUE = env("TDB_URL_PUBLIQUE", default="http://localhost:5173")
 
 LOGGING = {
     "version": 1,

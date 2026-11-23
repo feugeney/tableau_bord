@@ -46,6 +46,11 @@ it("conserve l'exception pendant l'enregistrement puis la remet à zéro après 
     return new Response(JSON.stringify([flux]));
   });
   rendre(<FluxETL />);
+  // Flux replié par défaut : une ligne de résumé, le formulaire au clic.
+  const entete = await screen.findByRole("button", { name: /^Oracle · Chaîne Dépense/ });
+  expect(entete).toHaveAttribute("aria-expanded", "false");
+  expect(screen.queryByRole("button", { name: "Vérifier un aperçu" })).not.toBeInTheDocument();
+  fireEvent.click(entete);
   const apercu = await screen.findByRole("button", { name: "Vérifier un aperçu" });
   fireEvent.click(screen.getByLabelText("Autoriser l'alimentation réelle par ce flux"));
   fireEvent.click(screen.getByLabelText(/Autoriser ce lancement Oracle ponctuel/));
@@ -112,6 +117,7 @@ it("enregistre la programmation choisie et signale un planificateur arrêté", a
     return new Response(JSON.stringify([flux]));
   });
   rendre(<FluxETL />);
+  fireEvent.click(await screen.findByRole("button", { name: /^SYSOP · Portefeuille/ }));
   fireEvent.change(await screen.findByLabelText("Chargement automatique"), { target: { value: "ouvres" } });
   fireEvent.change(screen.getByLabelText("Heure (Conakry)"), { target: { value: "03:30" } });
   fireEvent.click(screen.getByRole("button", { name: "Enregistrer la configuration" }));
@@ -119,4 +125,40 @@ it("enregistre la programmation choisie et signale un planificateur arrêté", a
   expect(configurations[0]).toMatchObject({ planification_cron: "30 3 * * 1-5" });
   expect(await screen.findByText(/Prochain chargement automatique/)).toBeInTheDocument();
   expect(await screen.findByText(/Le planificateur n'est pas démarré/)).toBeInTheDocument();
+});
+
+it("présente le flux du plan d'engagement avec sa connexion Oracle et sa page", async () => {
+  const flux = {
+    id: 3,
+    code: "oracle-plan-engagement",
+    nom: "Oracle · Plan d'engagement",
+    source: "plan_engagement",
+    profil: "oracle_plan_engagement",
+    exercice: 2023,
+    actif: true,
+    planification_cron: "",
+    requetes: [],
+    derniere_execution: null,
+    derniere_execution_planifiee: null,
+    prochaine_execution: null,
+  };
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (entree) =>
+    String(entree).includes("/planificateur/")
+      ? new Response(JSON.stringify({ actif: true }))
+      : new Response(JSON.stringify([flux])),
+  );
+  rendre(<FluxETL />);
+  const entete = await screen.findByRole("button", { name: /^Oracle · Plan d'engagement/ });
+  expect(entete).toHaveTextContent("Oracle Chaîne Dépense · plan d'engagement trimestriel");
+  expect(entete).toHaveTextContent("Exercice 2023");
+  fireEvent.click(entete);
+  expect(screen.getByText(/TD_PLAN_ENG → plafonds par section et titre/)).toBeInTheDocument();
+  // Exception horaire disponible ; pas de détail des requêtes de la Chaîne Dépense.
+  expect(screen.getByLabelText(/Autoriser ce lancement Oracle ponctuel/)).toBeInTheDocument();
+  expect(screen.queryByText("Requêtes et correspondances Oracle utilisées")).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Actualiser les données · 2023" })).toBeEnabled();
+  expect(screen.getByRole("link", { name: "Voir le plan d'engagement · 2023" })).toHaveAttribute(
+    "href",
+    "/pilotage?vue=plan&exercice=2023",
+  );
 });

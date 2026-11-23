@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="fr">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{{ titre }}</title></head>
+<body style="margin:0;padding:0;background:#f1f3f5;color:#243044;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center" style="padding:24px 12px;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:680px;background:#ffffff;border:1px solid #dce1e7;">
+<tr><td style="padding:28px 28px 20px;text-align:center;border-top:5px solid #152d4a;">
+{% if armoiries %}<img src="cid:armoiries-mefb" width="68" height="68" alt="Armoiries de la République de Guinée" title="Armoiries : Turn685, d’après Ttzavaras — Wikimedia Commons, licence CC BY-SA 3.0" style="display:block;margin:0 auto 12px;object-fit:contain;">{% endif %}
+<p style="margin:0;color:#152d4a;font-size:14px;font-weight:bold;letter-spacing:1px;">RÉPUBLIQUE DE GUINÉE</p>
+<p style="margin:6px 0;font-size:17px;font-weight:bold;color:#152d4a;">Ministère de l’Économie, des Finances et du Budget</p>
+<p style="margin:0;color:#667085;font-size:13px;">Tableau de bord des finances publiques</p>
+</td></tr>
+<tr><td><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td width="33%" height="3" bgcolor="#ce2837"></td><td width="34%" bgcolor="#e4bc47"></td><td width="33%" bgcolor="#258353"></td></tr></table></td></tr>
+<tr><td style="padding:28px;">
+{% if exemple %}<p style="margin:0 0 20px;padding:12px;background:#fff8e8;border:1px solid #e4bc47;font-weight:bold;">TEST DE MODÈLE — Données fictives d’illustration. Aucune alerte réelle n’est créée ou modifiée.</p>{% endif %}
+<p style="margin:0 0 8px;color:#667085;font-size:12px;">{% if categorie == 'relance' %}RELANCE{% elif categorie == 'test' %}VÉRIFICATION TECHNIQUE{% else %}NOTIFICATION{% endif %} · {{ date_envoi|date:"d/m/Y à H:i" }} (heure de Conakry)</p>
+<h1 style="margin:0 0 18px;font-size:23px;line-height:1.35;color:#152d4a;">{{ titre }}</h1>
+<p style="font-size:12px;color:#667085;">Référence : {{ reference }}</p>
+<p>Madame, Monsieur,</p><p>{{ introduction }}</p>
+{% if retard_dossier %}<p style="padding:12px;background:#f4f6f8;">Seuil de signalement du retard : <strong>{{ seuil_retard }} jours</strong>. Les durées ci-dessous sont constatées à la date de situation des données.</p>{% endif %}
+{% if delai %}<p style="padding:12px;background:#f4f6f8;">Délai de relance paramétré : <strong>{{ delai }} heures</strong>. La date de notification initiale est rappelée pour chaque élément.</p>{% endif %}
+{% if elements %}<p><strong>{% if elements|length == 1 %}Élément concerné{% else %}Éléments concernés{% endif %} : {{ elements|length }}</strong></p>{% endif %}
+{% for e in elements %}
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:16px 0;border:1px solid #dce1e7;"><tr><td style="padding:18px;">
+<p style="margin:0 0 8px;font-size:12px;color:#667085;">{{ e.reference }} · Niveau d’attention : {{ e.severite }}</p>
+<h2 style="margin:0 0 10px;font-size:17px;color:#152d4a;">{{ e.titre }}</h2>
+<p style="margin:0 0 10px;white-space:pre-line;">{{ e.constat }}</p>
+<p style="margin:0;font-size:13px;">Situation au : <strong>{{ e.date_situation|date:"d/m/Y"|default:"Non renseignée" }}</strong><br>Source : {{ e.source }}</p>
+{% if e.illustration %}<p style="font-size:13px;font-weight:bold;color:#795513;">Données d’illustration — source non raccordée.</p>{% endif %}
+{% if e.numero %}<p style="font-size:13px;">Dossier : {{ e.numero }}<br>Étape en attente : {{ e.etape|default:"Non renseignée" }}<br>Service ou acteur concerné : {{ e.acteur|default:"Non renseigné" }}{% if e.depuis %}<br>En attente depuis le : {{ e.depuis|date:"d/m/Y" }}{% endif %}{% if e.jours != None %}<br><strong>Durée d’attente constatée : {{ e.jours }} jours</strong>{% endif %}</p>{% endif %}
+{% if e.notification_initiale %}<p style="font-size:13px;">Notification initiale : {{ e.notification_initiale|date:"d/m/Y à H:i" }} (heure de Conakry).</p>{% endif %}
+{% if e.lien %}<p style="margin:12px 0 0;"><a href="{{ e.lien }}" style="color:#152d4a;">Consulter cet élément</a></p>{% endif %}
+</td></tr></table>
+{% endfor %}
+{% if action %}<h2 style="margin:24px 0 8px;font-size:17px;color:#152d4a;">Suite recommandée</h2><p>{{ action }}</p>{% endif %}
+{% if categorie != 'test' %}<p style="font-size:13px;color:#667085;">Ces éléments proviennent de contrôles automatisés et appellent, le cas échéant, une vérification par les services compétents.</p>{% endif %}
+{% if lien %}<table role="presentation" cellspacing="0" cellpadding="0" style="margin:24px 0;"><tr><td bgcolor="#152d4a" style="border-radius:4px;"><a href="{{ lien }}" style="display:inline-block;padding:12px 20px;color:#ffffff;text-decoration:none;font-weight:bold;">{{ bouton }}</a></td></tr></table>{% endif %}
+<p style="margin-top:24px;">Tableau de bord des finances publiques<br><span style="color:#667085;font-size:13px;">Notification automatique</span></p>
+</td></tr>
+<tr><td style="padding:18px 28px;background:#f4f6f8;border-top:1px solid #dce1e7;font-size:11px;color:#667085;">
+Message destiné aux personnes habilitées. Veuillez privilégier le tableau de bord pour consulter les informations et renseigner les suites données. Cette boîte d’envoi automatique n’est pas destinée au traitement des réponses.
+<br><br>© {% now "Y" %} SMSI · Tous droits réservés
+
+</td></tr></table>
+</td></tr></table>
+</body></html>

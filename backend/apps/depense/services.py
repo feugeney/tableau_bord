@@ -707,11 +707,11 @@ def _cle_libelle(texte: str) -> str:
 _FONCTION_PAR_LIBELLE = {_cle_libelle(v): k for k, v in FONCTIONS.items()}
 
 
-MESURES_REPARTIES = ("engage", "liquide", "ordonnance", "vbp", "paye")
+MESURES_REPARTIES = ("credit", "engage", "liquide", "ordonnance", "vbp", "paye")
 
 
 def repartitions(f: Filtres) -> dict:
-    """Engagé, liquidé, ordonnancé, VBP et payé par titre, fonction, zone d'exécution et type de budget.
+    """Crédits et étapes de dépense par pilier Simandou, titre, fonction, zone et type de budget.
 
     Montants bruts de la situation (même base que les taux). Un axe absent de l'extraction
     est signalé « non disponible » plutôt que présenté comme une seule catégorie.
@@ -727,17 +727,19 @@ def repartitions(f: Filtres) -> dict:
                    nullif(l.attributs->>'fonctionnelle', '') AS fonction,
                    {criteres.zone_sql("l")} AS code_zone,
                    nullif(l.attributs->>'zone_geographique', '') AS zone,
+                   nullif({criteres.pilier_sql("l")}, '') AS pilier,
+                   sum(l.credit_actuel) AS credit,
                    sum(l.credit_engage) AS engage, sum(l.montant_liquide) AS liquide,
                    sum(l.montant_ordonnance) AS ordonnance, sum(l.montant_vbp) AS vbp,
                    sum(l.montant_paye) AS paye
             FROM dw.fait_situation_ligne l
             WHERE l.chargement_id IN (SELECT id FROM mart.v_chargements_actifs) AND {where}
-            GROUP BY 1, 2, 3, 4, 5, 6""",
+            GROUP BY 1, 2, 3, 4, 5, 6, 7""",
         params,
     )
 
-    axes: dict[str, dict[str, dict]] = {"titre": {}, "fonction": {}, "zone": {}, "type_budget": {}}
-    renseignes = {"fonction": False, "zone": False}
+    axes: dict[str, dict[str, dict]] = {"pilier": {}, "titre": {}, "fonction": {}, "zone": {}, "type_budget": {}}
+    renseignes = {"pilier": False, "fonction": False, "zone": False}
 
     def ajouter(axe: str, code: str, libelle: str, r: dict) -> None:
         p = axes[axe].setdefault(code, {"code": code, "libelle": libelle, **{m: D0 for m in MESURES_REPARTIES}})
@@ -748,6 +750,10 @@ def repartitions(f: Filtres) -> dict:
         ajouter("titre", r["titre"], f"{r['titre']} · {TITRES.get(r['titre'], 'Titre ' + r['titre'])}", r)
         if titres_retenus and r["titre"] not in titres_retenus:
             continue
+        pilier = r["pilier"]
+        if pilier:
+            renseignes["pilier"] = True
+        ajouter("pilier", pilier or "?", LIBELLES_PILIERS.get(pilier, pilier) if pilier else "Pilier non renseigné", r)
         code_f = r["code_fonction"] or _FONCTION_PAR_LIBELLE.get(_cle_libelle(r["fonction"] or ""))
         if code_f or r["fonction"]:
             renseignes["fonction"] = True
@@ -766,6 +772,7 @@ def repartitions(f: Filtres) -> dict:
 
     return {
         "axes": [
+            sortie("pilier", "Par pilier Simandou", renseignes["pilier"]),
             sortie("titre", "Par titre"),
             sortie("fonction", "Par fonction", renseignes["fonction"]),
             sortie("zone", "Par zone d'exécution", renseignes["zone"]),
@@ -773,6 +780,7 @@ def repartitions(f: Filtres) -> dict:
         ],
         "titre_filtre": ", ".join(sorted(titres_retenus)) or None,
         "indisponible": {
+            "pilier": "Pilier Simandou absent de cette extraction.",
             "zone": "Code de sous-section absent : la zone d'exécution ne peut pas être déterminée.",
             "fonction": "Classification fonctionnelle absente de cette extraction.",
         },

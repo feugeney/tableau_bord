@@ -48,6 +48,17 @@ def planifier_releve_depots() -> None:
     )
 
 
+def planifier_notification_alertes() -> None:
+    """Courriels d'alertes en attente et relances (48 h sans réponse), vérifiés toutes les 15 minutes."""
+    from django_celery_beat.models import IntervalSchedule
+
+    intervalle, _ = IntervalSchedule.objects.get_or_create(every=15, period=IntervalSchedule.MINUTES)
+    PeriodicTask.objects.update_or_create(
+        name="notification-alertes",
+        defaults={"task": "etl.notifier_alertes", "interval": intervalle, "crontab": None, "enabled": True},
+    )
+
+
 def synchroniser_tout() -> None:
     from apps.core.etl_admin import synchroniser_flux
     from apps.core.models import FluxETL
@@ -57,3 +68,4 @@ def synchroniser_tout() -> None:
     for flux in FluxETL.objects.all():
         synchroniser_flux(flux)
     planifier_releve_depots()
+    planifier_notification_alertes()

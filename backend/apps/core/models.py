@@ -110,6 +110,8 @@ class FluxETL(models.Model):
         choices=[
             ("sysop_portefeuille", "Portefeuille SYSOP"),
             ("oracle_chaine_depense", "Chaîne Dépense Oracle"),
+            ("oracle_plan_engagement", "Plan d'engagement Oracle"),
+            ("sidof_lignes_budgetaires", "Lignes budgétaires SIDOF"),
         ],
     )
     exercice = models.PositiveSmallIntegerField()
@@ -245,11 +247,42 @@ class Alerte(models.Model):
     lien = models.CharField(max_length=160, blank=True)
     statut = models.CharField(max_length=16, choices=StatutAlerte.choices, default=StatutAlerte.NOUVELLE)
     statut_modifie_par = models.ForeignKey("core.Utilisateur", null=True, blank=True, on_delete=models.SET_NULL)
+    # Alertes par dossier (arbitrages) : la clé identifie le dossier d'une évaluation à l'autre, pour ne
+    # pas renvoyer la notification ni perdre le statut à chaque chargement.
+    cle = models.CharField(max_length=64, blank=True, db_index=True)
+    donnees = models.JSONField(default=dict, blank=True, help_text="Détail affiché : titre, acteur, montant…")
+    notifiee_le = models.DateTimeField(null=True, blank=True)
+    relancee_le = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         db_table = "core_alerte"
         ordering = ["-date"]
         indexes = [models.Index(fields=["domaine", "severite", "statut"])]
+
+
+class NotificationMail(models.Model):
+    class Statut(models.TextChoices):
+        EN_COURS = "en_cours", "En cours"
+        ENVOYE = "envoye", "Accepté par la messagerie"
+        ECHEC = "echec", "Échec"
+        SIMULATION = "simulation", "Simulation"
+
+    date = models.DateTimeField(auto_now_add=True, db_index=True)
+    termine_le = models.DateTimeField(null=True, blank=True)
+    type = models.CharField(max_length=16, choices=[("test", "Test"), ("alerte", "Alerte"), ("relance", "Relance")])
+    statut = models.CharField(max_length=16, choices=Statut.choices, default=Statut.EN_COURS)
+    sujet = models.CharField(max_length=255)
+    reference = models.CharField(max_length=40, blank=True, db_index=True)
+    modele = models.CharField(max_length=64, blank=True)
+    destinataires = models.JSONField(default=list)
+    regle = models.ForeignKey(RegleAlerte, null=True, blank=True, on_delete=models.SET_NULL)
+    alertes_ids = models.JSONField(default=list)
+    utilisateur = models.ForeignKey("core.Utilisateur", null=True, blank=True, on_delete=models.SET_NULL)
+    erreur = models.TextField(blank=True)
+
+    class Meta:
+        db_table = "core_notification_mail"
+        ordering = ["-date", "-id"]
 
 
 class JournalAudit(models.Model):

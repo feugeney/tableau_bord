@@ -26,7 +26,7 @@ import { ONGLETS, ongletAutorise, ongletCourant } from "@/lib/onglets";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/theme/ThemeProvider";
 
-import { Armoiries, CREDIT_ARMOIRIES, FiletTricolore, MiniDrapeau } from "./Signature";
+import { Armoiries, FiletTricolore, MiniDrapeau } from "./Signature";
 
 const SELECT = "h-7 cursor-pointer rounded-full border-0 px-1.5 text-sm font-bold text-on-navy";
 
@@ -384,9 +384,10 @@ function PiedDePage() {
   return (
     <footer className="sans-impression sans-presentation mt-8">
       <FiletTricolore fin />
-      <div className="mx-auto flex max-w-page flex-wrap items-baseline justify-between gap-x-6 gap-y-1 px-4 py-4 text-sm text-ink-2 md:px-6">
-        <p>{PLATEFORME.ministere} · Service de Modernisation des systèmes d'information</p>
-        {CREDIT_ARMOIRIES && <p className="text-xs text-ink-3">{CREDIT_ARMOIRIES}</p>}
+      <div className="mx-auto flex max-w-page justify-center px-4 py-4 md:px-6">
+        <p className="text-xs text-ink-3">
+          © {new Date().getFullYear()} {PLATEFORME.droits}
+        </p>
       </div>
     </footer>
   );

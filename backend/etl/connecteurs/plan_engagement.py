@@ -113,17 +113,30 @@ class PlanEngagementConnector(BaseConnector):
                     donnees[cle] = pd.DataFrame(cur.fetchall(), columns=[c[0] for c in cur.description], dtype=object)
         return donnees
 
+    def _exercices_ouverts(self) -> list[int]:
+        """Exercices ayant un plan dans Oracle, pour orienter l'utilisateur ; vide si la source est un jeu fourni."""
+        if self._fournies is not None:
+            return []
+        try:
+            return exercices_disponibles()
+        except Exception:  # message indicatif seulement : l'échec principal reste celui de l'exercice demandé
+            return []
+
     def validate(self) -> RapportValidation:
         rapport = RapportValidation()
         periodes = self.donnees.get(PERIODES)
         plafonds = self.donnees.get(PLAFONDS)
         if periodes is None or periodes.empty:
+            message = f"aucun plan d'engagement ouvert pour {self.exercice}"
+            disponibles = self._exercices_ouverts()
+            if disponibles:
+                message += f" ; exercices disponibles dans la Chaîne Dépense : {', '.join(map(str, disponibles))}"
             rapport.ajouter(
                 "periodes",
                 "Trimestres du plan d'engagement présents",
                 "bloquant",
                 False,
-                detail={"message": f"aucun plan d'engagement ouvert pour {self.exercice}"},
+                detail={"message": message, "exercices_disponibles": disponibles},
             )
             return rapport
         inconnues = sorted({n.code(p) for p in periodes["periode"]} - set(ORDRE_PERIODES))

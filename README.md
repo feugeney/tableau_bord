@@ -29,6 +29,10 @@ Node sert à compiler l'interface ; aucun serveur Node n'est nécessaire pendant
 
 Le fichier de configuration utilisé est **backend/.env**. Les secrets et connexions Oracle/SYSOP
 existants sont conservés. Les initialisations suivantes préservent les comptes et les données.
+Pour tester un seul exercice, définir `TDB_EXERCICE_TEST=2025` dans ce fichier et redémarrer
+l'application : seuls les situations de 2025 sont proposées et les imports d'autres exercices sont refusés.
+Régler aussi les flux ETL sur 2025 dans l'administration. Vider cette variable puis redémarrer
+pour retrouver tous les exercices ; les données existantes sont conservées.
 Une première installation sans aucun compte crée `admin-local` et enregistre ses identifiants dans
 `backend/.local/identifiants-initiaux.txt`, ignoré par Git ; la double authentification s'enrôle à la connexion.
 
@@ -155,6 +159,7 @@ Interface : onglet **Administration** (icône roue dentée). API : `/api/v1/admi
 | Utilisateurs et accès | Comptes, rôles, domaines visibles, réinitialisation de la double authentification |
 | Partage de données (API) | Jetons d'accès en lecture seule pour des systèmes tiers |
 | Règles d'alerte | Activation, sévérité, seuils, messages ; réévaluation |
+| Notifications et mails | État SMTP, prévisualisation des 17 modèles métier et de leurs relances, tests à une adresse saisie, historique filtrable avec références |
 | Paramètres et seuils | Seuils des règles de gestion (`core_parametre`) |
 | Journal d'audit | Connexions, consultations, imports, exports, administration |
 
@@ -204,8 +209,10 @@ Jetons dans `frontend/src/theme/tokens.css` (clair et sombre). Les couleurs du d
 signature : filet tricolore sous l'en-tête, pied de page, écran de connexion, impression. Un test
 (`src/test/charte.test.ts`) le vérifie, ainsi que l'absence de couleur écrite en dur dans les composants.
 Armoiries : `frontend/src/assets/armoiries.svg` est une version **provisoire** issue de Wikimedia Commons
-(CC BY-SA 3.0, mention en pied de page). La remplacer par le fichier officiel du ministère, puis vider
-`CREDIT_ARMOIRIES` dans `frontend/src/components/cadre/Signature.tsx` (voir `frontend/src/assets/LISEZMOI.md`).
+(CC BY-SA 3.0). Depuis le 23/11/2026, le crédit n'est plus écrit en pied de page : il figure dans l'infobulle des
+armoiries à l'écran, dans les propriétés (mots-clés) des PDF et dans l'infobulle de l'image des courriels. La remplacer
+par le fichier officiel du ministère, puis vider `CREDIT_ARMOIRIES` dans `frontend/src/components/cadre/Signature.tsx`
+et `backend/apps/core/export_pdf.py` (voir `frontend/src/assets/LISEZMOI.md`).
 Le nom de la plateforme se change en un seul endroit : `frontend/src/lib/identite.ts`.
 
 ## Rôles

@@ -11,7 +11,7 @@ def _axe(d, nom):
     return next(a for a in d["axes"] if a["axe"] == nom)
 
 
-def test_quatre_axes_et_zone_lue_dans_le_code_de_sous_section(charge):
+def test_cinq_axes_et_zone_lue_dans_le_code_de_sous_section(charge):
     d = repartitions(resoudre_filtres({}, "chaine_depense"))
     titre = _axe(d, "titre")
     total = sum(p["engage"] for p in titre["parts"])
@@ -46,11 +46,12 @@ def test_le_filtre_de_nature_garde_tous_les_titres(charge):
     assert sum((p["engage"] for p in _axe(filtre, "type_budget")["parts"]), Decimal(0)) == engage_5
 
 
-def test_cinq_etapes_de_la_chaine_reparties(charge):
+def test_six_etapes_de_la_chaine_reparties(charge):
     """Engagé, liquidé, ordonnancé, VBP et payé : chaque mesure retrouve le total de la situation."""
     d = repartitions(resoudre_filtres({}, "chaine_depense"))
     lignes = FaitSituationLigne.objects.filter(chargement=charge)
     for mesure, champ in (
+        ("credit", "credit_actuel"),
         ("engage", "credit_engage"),
         ("liquide", "montant_liquide"),
         ("ordonnance", "montant_ordonnance"),
@@ -59,3 +60,26 @@ def test_cinq_etapes_de_la_chaine_reparties(charge):
     ):
         attendu = sum((getattr(l, champ) or Decimal(0) for l in lignes), Decimal(0))
         assert sum((p[mesure] for p in _axe(d, "titre")["parts"]), Decimal(0)) == attendu, mesure
+
+
+def test_pilier_avant_titre_et_totaux_des_six_mesures(charge):
+    lignes = FaitSituationLigne.objects.filter(chargement=charge)
+    lignes.update(attributs={"pilier_simandou": "1"})
+    lignes.filter(pk=lignes.first().pk).update(attributs={})
+    d = repartitions(resoudre_filtres({}, "chaine_depense"))
+    assert [a["axe"] for a in d["axes"]][:2] == ["pilier", "titre"]
+    pilier = _axe(d, "pilier")
+    assert pilier["disponible"]
+    assert any(p["libelle"] == "Pilier non renseigné" for p in pilier["parts"])
+    assert any(p["code"] != "?" for p in pilier["parts"])
+    for mesure in ("credit", "engage", "liquide", "ordonnance", "vbp", "paye"):
+        assert sum(p[mesure] for p in pilier["parts"]) == sum(p[mesure] for p in _axe(d, "titre")["parts"])
+    filtre = repartitions(resoudre_filtres({"nature": "investissement"}, "chaine_depense"))
+    titre5 = next(p for p in _axe(d, "titre")["parts"] if p["code"] == "5")
+    for mesure in ("credit", "engage", "liquide", "ordonnance", "vbp", "paye"):
+        assert sum(p[mesure] for p in _axe(filtre, "pilier")["parts"]) == titre5[mesure]
+
+
+def test_pilier_absent_signale_indisponible(charge):
+    FaitSituationLigne.objects.filter(chargement=charge).update(attributs={})
+    assert not _axe(repartitions(resoudre_filtres({}, "chaine_depense")), "pilier")["disponible"]

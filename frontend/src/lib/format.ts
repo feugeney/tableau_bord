@@ -31,9 +31,9 @@ export function enMds(gnf: number | null | undefined): number {
 }
 
 /** Ratio 0,712 → « 71 % » (sans décimale). */
-export function pct(ratio: number | null | undefined): string {
+export function pct(ratio: number | null | undefined, decimales = 0): string {
   if (ratio === null || ratio === undefined || Number.isNaN(ratio)) return "—";
-  return `${grouper(Math.round(ratio * 100), 0)}${ESPACE_FINE}%`;
+  return `${grouper(decimales === 0 ? Math.round(ratio * 100) : ratio * 100, decimales)}${ESPACE_FINE}%`;
 }
 
 const MOIS = new Intl.DateTimeFormat("fr-FR", { month: "short", timeZone: "UTC" });

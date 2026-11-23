@@ -10,13 +10,11 @@ import type {
   Enveloppe,
   IndicateursDepense,
   Mensuel,
-  Nature,
   RestesAPayer,
   SectionDetail,
   SectionLigne,
-  Simandou,
 } from "@/api/types";
-import { HBarList, Legende, SEGMENTS_EXECUTION, StackedProgress } from "@/components/Barres";
+import { HBarList, Legende } from "@/components/Barres";
 import { BoutonColonnes, PanneauColonnes } from "@/components/ChoixColonnes";
 import { DataTable, type Colonne } from "@/components/DataTable";
 import { ExportMinisteres } from "@/components/ExportMinisteres";
@@ -24,20 +22,20 @@ import { BoutonFiltres, PanneauFiltres } from "@/components/FiltresDepenses";
 import { GroupedBarChart } from "@/components/GroupedBarChart";
 import { Anneau } from "@/components/Anneau";
 import { Jauge, Note, StatusPill, type Etat } from "@/components/Indicateurs";
-import { Montant, Pourcentage } from "@/components/Montant";
+import { Montant } from "@/components/Montant";
 import { NotificationAlertes } from "@/components/NotificationAlertes";
 import { PilotageDepense } from "@/components/PilotageDepense";
-import { Carte, Infobulle, Segment } from "@/components/ui/primitives";
+import { Carte, Segment } from "@/components/ui/primitives";
 import { Sheet } from "@/components/ui/sheet";
-import { useFiltres, type ModePaiement, type Nature as TNature } from "@/hooks/useFiltres";
+import { useFiltres, type Nature as TNature } from "@/hooks/useFiltres";
 import { plierParts } from "@/lib/anneau";
 import { enMds, moisCourt, nombre, pct } from "@/lib/format";
 
 import { EtatBloc, EtatPage, TitrePage, Zone } from "./commun";
-import { BalanceAgee, BandeauFraicheur, CourbeExecution, MatriceMinisteres } from "./depenses/analyses";
+import { BalanceAgee, CourbeExecution } from "./depenses/analyses";
 import { useComparaisonN1, type ComparaisonN1 } from "./depenses/comparaison";
 import { IndicateursExecution } from "./depenses/IndicateursExecution";
-import { BlocProjectionDepenses } from "./depenses/Projection";
+import { EncadreArbitrages, FicheTitre, TableauTitres } from "./depenses/Titres";
 
 const NATURES: { valeur: TNature; libelle: string }[] = [
   { valeur: "", libelle: "Toutes" },
@@ -57,10 +55,6 @@ const TITRE_VERS_NATURE: Record<string, TNature> = {
 const NATURE_VERS_TITRE: Record<string, string> = Object.fromEntries(
   Object.entries(TITRE_VERS_NATURE).map(([t, nature]) => [nature, t]),
 );
-const AIDE_PAIEMENT =
-  "Paiements ajustés : les salaires (procédure Solde) et la dette (débit d'office) sont payés hors de la chaîne. " +
-  "Ils sont exclus pour ne pas faire apparaître un faux reste à payer. « Bruts » les réintègre.";
-
 export default function Depenses() {
   const { filtres, definir } = useFiltres();
   const indicateurs = useDonnees<IndicateursDepense>("/depense/indicateurs/");
@@ -79,18 +73,8 @@ export default function Depenses() {
           options={NATURES}
           onChange={(v) => definir({ nature: v })}
         />
-        <div className="flex items-center gap-1">
-          <Segment<ModePaiement>
-            libelle="Paiements"
-            valeur={filtres.paiement}
-            options={[
-              { valeur: "ajuste", libelle: "Paiements ajustés" },
-              { valeur: "brut", libelle: "Bruts" },
-            ]}
-            onChange={(v) => definir({ paiement: v })}
-          />
-          <Infobulle contenu={AIDE_PAIEMENT} />
-        </div>
+        {/* Sélecteur « Paiements ajustés / Bruts » retiré le 23/11/2026 : le paiement affiché est celui enregistré
+            dans la Chaîne Dépense (choix de la direction du 21/11/2026). */}
         <BoutonFiltres ouvert={filtresOuverts} onBascule={() => setFiltresOuverts((o) => !o)} />
         {/* Points d'attention : notification (cloche + annonce), plus un bloc figé dans la page. */}
         <NotificationAlertes domaine="depense" libelle="Dépenses" />
@@ -106,19 +90,28 @@ function Contenu({ i, env }: { i: IndicateursDepense; env: Enveloppe<Indicateurs
   const [params, setParams] = useSearchParams();
   const meta = env.meta;
   const ministere = params.get("ministere");
+  const vueTitre = params.get("vue_titre");
   const comparaison = useComparaisonN1();
   const n1 = comparaison.data?.data?.disponible ? comparaison.data.data : null;
 
-  function ouvrirMinistere(code: string | null) {
+  function basculerParametre(cle: string, valeur: string | null) {
     setParams(
       (avant) => {
         const p = new URLSearchParams(avant);
-        if (code) p.set("ministere", code);
-        else p.delete("ministere");
+        if (valeur) p.set(cle, valeur);
+        else p.delete(cle);
         return p;
       },
       { replace: true },
     );
+  }
+
+  function ouvrirMinistere(code: string | null) {
+    basculerParametre("ministere", code);
+  }
+
+  function ouvrirTitre(titre: string | null) {
+    basculerParametre("vue_titre", titre);
   }
 
   return (
@@ -128,13 +121,17 @@ function Contenu({ i, env }: { i: IndicateursDepense; env: Enveloppe<Indicateurs
           Données en cours de validation.
         </p>
       )}
-      <BandeauFraicheur meta={meta} />
+      {/* Bandeau « Situation au … » retiré le 23/11/2026 : l'exercice et la date figurent dans la barre du haut. */}
       <Zone titre="Indicateurs clés">
-        {/* Chaîne des montants (Crédits → Engagé → … → Payé · Reste à payer) mise en attente le 19/11/2026.
-            Pour la réactiver : décommenter la ligne ci-dessous et réimporter ChaineMontants.
-        <ChaineMontants i={i} brut={filtres.paiement === "brut"} /> */}
-        {/* Chaque taux rapporte une étape à la précédente (montants bruts) ; repère : exercice précédent. */}
         <IndicateursExecution i={i} n1={n1} />
+      </Zone>
+
+      <Zone titre="Vue par titre">
+        <TableauTitres onOuvrir={ouvrirTitre} />
+      </Zone>
+
+      <Zone titre="Arbitrages">
+        <EncadreArbitrages onOuvrir={ouvrirTitre} />
       </Zone>
 
       <Zone titre="Répartition">
@@ -149,20 +146,11 @@ function Contenu({ i, env }: { i: IndicateursDepense; env: Enveloppe<Indicateurs
       </Zone>
 
       <Zone titre="Analyses">
-        <BlocNatures onNature={(t) => definir({ nature: TITRE_VERS_NATURE[t] ?? "" })} />
-        <BlocSimandou onSection={ouvrirMinistere} />
         <BlocRestes />
       </Zone>
 
       <Zone titre="Tendance">
         <CourbeExecution parMois={<BlocMensuel />} />
-      </Zone>
-
-      <Zone titre="Où agir">
-        <div className="grid gap-4 lg:grid-cols-2">
-          <MatriceMinisteres onSection={ouvrirMinistere} />
-          <BlocProjectionDepenses onSection={ouvrirMinistere} />
-        </div>
       </Zone>
 
       <Zone titre="Détail">
@@ -174,9 +162,9 @@ function Contenu({ i, env }: { i: IndicateursDepense; env: Enveloppe<Indicateurs
       {/* Contrôles réservés aux contrôleurs, repliés par défaut (P11). */}
       <PanneauQualite nbLfiAbsent={i.nb_lfi_absent}>
         <p role="note" className="text-sm text-ink-2">
-          Les paiements sont ceux enregistrés dans la source affichée. Les opérations payées hors chaîne ne
-          constituent pas des paiements nuls confirmés. Le solde ajusté reste à rapprocher avec le Trésor et
-          ne certifie pas un stock d'arriérés.
+          Les paiements sont ceux enregistrés dans la Chaîne Dépense. Les opérations payées hors chaîne
+          (salaires, dette) ne constituent pas des paiements nuls confirmés. Le reste à payer reste à
+          rapprocher avec le Trésor et ne certifie pas un stock d'arriérés.
         </p>
         {(i.nb_lfi_absent > 0 ||
           (i.qualite &&
@@ -204,7 +192,7 @@ function Contenu({ i, env }: { i: IndicateursDepense; env: Enveloppe<Indicateurs
               )}
               {i.qualite?.soldes_negatifs.map((s) => (
                 <li key={s.section}>
-                  Section {s.section} : solde ajusté négatif de <Montant gnf={s.montant} /> à rapprocher ; les
+                  Section {s.section} : solde négatif de <Montant gnf={s.montant} /> à rapprocher ; les
                   montants source restent conservés.
                 </li>
               ))}
@@ -215,160 +203,22 @@ function Contenu({ i, env }: { i: IndicateursDepense; env: Enveloppe<Indicateurs
       </PanneauQualite>
 
       <DetailMinistere code={ministere} onFermer={() => ouvrirMinistere(null)} />
+      <FicheTitre
+        titre={vueTitre}
+        onFermer={() => ouvrirTitre(null)}
+        onFiltrer={(t) => {
+          setParams(
+            (avant) => {
+              const p = new URLSearchParams(avant);
+              p.delete("vue_titre");
+              p.set("nature", TITRE_VERS_NATURE[t] ?? "");
+              return p;
+            },
+            { replace: true },
+          );
+        }}
+      />
     </div>
-  );
-}
-
-/** Indicateur en ligne (libellé, valeur, contexte, jauge fine), pour une colonne compacte. */
-function IndicateurCompact({
-  libelle,
-  valeur,
-  contexte,
-  jauge,
-}: {
-  libelle: string;
-  valeur: ReactNode;
-  contexte: string;
-  jauge: number | null | undefined;
-}) {
-  return (
-    <div className="flex flex-col gap-1 py-2.5 first:pt-0 last:pb-0">
-      <dt className="text-sm text-ink-2">{libelle}</dt>
-      <dd className="chiffres text-lg font-bold leading-tight text-ink">{valeur}</dd>
-      <dd className="text-xs text-ink-2">{contexte}</dd>
-      <dd>
-        <Jauge valeur={jauge} libelle={libelle} />
-      </dd>
-    </div>
-  );
-}
-
-function BlocSimandou({ onSection }: { onSection: (code: string) => void }) {
-  const r = useDonnees<Simandou>("/depense/simandou/");
-  return (
-    <EtatBloc requete={r}>
-      {(s) => (
-        // Une seule ligne : indicateurs compacts (1/3) à gauche, exécution par pilier (2/3) à droite.
-        <div className="grid gap-4 lg:grid-cols-12">
-          <section
-            aria-labelledby="simandou-indicateurs-titre"
-            className="carte flex flex-col p-4 lg:col-span-4"
-          >
-            <h3 id="simandou-indicateurs-titre" className="etiquette mb-3">
-              Simandou 2040
-            </h3>
-            <dl className="flex flex-col divide-y divide-border">
-              <IndicateurCompact
-                libelle="Crédits rattachés"
-                valeur={<Montant gnf={s.credit_simandou} />}
-                contexte={`${pct(s.part_simandou)} des crédits actuels · ${s.piliers.length} piliers`}
-                jauge={s.part_simandou}
-              />
-              <IndicateurCompact
-                libelle="Taux d'engagement"
-                valeur={<Pourcentage ratio={s.taux_engagement_simandou} />}
-                contexte="Engagé sur les crédits des piliers"
-                jauge={s.taux_engagement_simandou}
-              />
-              <IndicateurCompact
-                libelle="Projets « green »"
-                valeur={<Montant gnf={s.green.credit_actuel} />}
-                contexte={`${nombre(s.green.nb_lignes)} lignes · ${pct(s.green.part)} des crédits · engagé ${pct(
-                  s.green.taux_engagement,
-                )}`}
-                jauge={s.green.taux_engagement}
-              />
-            </dl>
-          </section>
-          <Carte
-            id="simandou"
-            className="lg:col-span-8"
-            titre="Exécution par pilier Simandou 2040"
-            sousTitre="Colonne « pilier Simandou » de la Chaîne Dépense · cliquer sur un ministère ouvre sa fiche"
-            actions={<Legende elements={SEGMENTS_EXECUTION} />}
-          >
-            <ul className="flex flex-col gap-3">
-              {[...s.piliers, ...(s.hors_pilier ? [s.hors_pilier] : [])].map((p) => (
-                <li key={p.pilier ?? "hors"} className="flex flex-col gap-1">
-                  <span className="flex flex-wrap items-baseline justify-between gap-x-3 text-base">
-                    <span className={p.pilier ? "font-bold text-ink" : "font-bold text-ink-2"}>
-                      {p.libelle}
-                    </span>
-                    <span className="text-ink-2">
-                      <Montant gnf={p.credit_actuel} /> · {pct(p.part)} des crédits · engagé{" "}
-                      {pct(p.taux_engagement)} · payé {pct(p.taux_paiement)} des ordonnancés
-                    </span>
-                  </span>
-                  <StackedProgress
-                    libelle={p.libelle}
-                    segments={SEGMENTS_EXECUTION.map((seg) => ({
-                      ...seg,
-                      valeur: p.empile[seg.code as keyof Nature["empile"]],
-                    }))}
-                  />
-                  {p.pilier && (
-                    <span className="flex flex-wrap gap-x-3 text-sm text-ink-2">
-                      {p.principaux_ministeres.map((m) => (
-                        <button
-                          key={m.code}
-                          type="button"
-                          onClick={() => onSection(m.code)}
-                          className="underline-offset-2 hover:underline"
-                        >
-                          {m.libelle_court}
-                        </button>
-                      ))}
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </Carte>
-        </div>
-      )}
-    </EtatBloc>
-  );
-}
-
-function BlocNatures({ onNature }: { onNature: (titre: string) => void }) {
-  const r = useDonnees<Nature[]>("/depense/natures/", { nature: undefined });
-  return (
-    <Carte
-      id="natures"
-      titre="Exécution par nature économique"
-      sousTitre="Cliquer sur une nature filtre toute la page"
-      actions={<Legende elements={SEGMENTS_EXECUTION} />}
-    >
-      <EtatBloc requete={r}>
-        {(natures) => (
-          <ul className="flex flex-col gap-2">
-            {natures.map((n) => (
-              <li key={n.titre}>
-                <button
-                  type="button"
-                  onClick={() => onNature(n.titre)}
-                  className="flex w-full flex-col gap-1 rounded-sm p-1 text-left hover:bg-hover"
-                >
-                  <span className="flex flex-wrap items-baseline justify-between gap-x-3 text-base">
-                    <span className="font-bold text-ink">{n.libelle}</span>
-                    <span className="text-ink-2">
-                      <Montant gnf={n.credit_actuel} /> · engagé {pct(n.taux_engagement)}
-                    </span>
-                  </span>
-                  <StackedProgress
-                    libelle={n.libelle}
-                    segments={SEGMENTS_EXECUTION.map((s) => ({
-                      ...s,
-                      valeur: n.empile[s.code as keyof Nature["empile"]],
-                    }))}
-                  />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </EtatBloc>
-    </Carte>
   );
 }
 
@@ -679,7 +529,7 @@ function DetailMinistere({ code, onFermer }: { code: string | null; onFermer: ()
 
 interface Repartitions {
   axes: {
-    axe: "titre" | "fonction" | "zone" | "type_budget";
+    axe: "pilier" | "titre" | "fonction" | "zone" | "type_budget";
     titre: string;
     disponible: boolean;
     parts: ({ code: string; libelle: string } & Record<MesureRepartie, number>)[];
@@ -688,10 +538,11 @@ interface Repartitions {
   indisponible: Record<string, string>;
 }
 
-type MesureRepartie = "engage" | "liquide" | "ordonnance" | "vbp" | "paye";
+type MesureRepartie = "credit" | "engage" | "liquide" | "ordonnance" | "vbp" | "paye";
 
-/** Les cinq étapes de la chaîne, dans l'ordre : libellé du sélecteur et titre du cadre. */
+/** Les six étapes de la chaîne, dans l'ordre : libellé du sélecteur et titre du cadre. */
 const MESURES_REPARTIES: { valeur: MesureRepartie; libelle: string; titre: string }[] = [
+  { valeur: "credit", libelle: "Crédit", titre: "Répartition des crédits" },
   { valeur: "engage", libelle: "Engagé", titre: "Répartition de l'engagé" },
   { valeur: "liquide", libelle: "Liquidé", titre: "Répartition du liquidé" },
   { valeur: "ordonnance", libelle: "Ordonnancé", titre: "Répartition de l'ordonnancé" },
@@ -699,8 +550,8 @@ const MESURES_REPARTIES: { valeur: MesureRepartie; libelle: string; titre: strin
   { valeur: "paye", libelle: "Payé", titre: "Répartition du payé" },
 ];
 
-/** Quatre anneaux (titre, fonction, zone, BAS) ; un seul sélecteur choisit l'étape de la chaîne répartie. */
-function BlocRepartitions({
+/** Cinq anneaux (pilier Simandou, titre, fonction, zone, BAS) ; un seul sélecteur choisit l'étape de la chaîne répartie. */
+export function BlocRepartitions({
   titreActif,
   onTitre,
 }: {
@@ -726,7 +577,7 @@ function BlocRepartitions({
     >
       <EtatBloc requete={r} hauteur="h-72">
         {(d) => (
-          <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-5">
             {d.axes.map((a) => (
               <section key={a.axe} aria-labelledby={`repartition-${a.axe}`} className="min-w-0">
                 <h3 id={`repartition-${a.axe}`} className="etiquette mb-2">

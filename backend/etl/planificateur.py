@@ -96,10 +96,16 @@ def est_due(tache, maintenant: datetime) -> bool:
     return False
 
 
+# Des tâches dues au même passage démarrent dans des fils distincts : sans verrou, le second lirait un
+# catalogue encore incomplet (NotRegistered) pendant que le premier importe les modules de tâches.
+_CHARGEMENT_TACHES = threading.Lock()
+
+
 def _taches_celery() -> dict:
     from config.celery import app
 
-    app.loader.import_default_modules()
+    with _CHARGEMENT_TACHES:
+        app.loader.import_default_modules()
     return app.tasks
 
 
