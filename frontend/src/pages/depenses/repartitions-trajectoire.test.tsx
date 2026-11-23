@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { rendre, simulerApi } from "@/test/rendu";
@@ -72,4 +72,61 @@ it("signale le cumul non rapproché et l'absence de points datés", async () => 
   expect(screen.getByText(/La courbe ne reconstitue pas/)).toBeInTheDocument();
   await userEvent.click(screen.getByRole("radio", { name: "Par mois" }));
   expect(screen.getByText("Mensuel")).toBeInTheDocument();
+});
+
+it("propose Simandou et un pilier précis pour le cumul et la vue mensuelle", async () => {
+  const api = simulerApi({
+    "/depense/criteres/": {
+      meta: {},
+      data: {
+        criteres: [
+          {
+            cle: "piliers",
+            valeurs: [
+              { code: "Sante et Bien-etre", libelle: "Santé et bien-être" },
+              { code: "Education et Culture", libelle: "Éducation et culture" },
+            ],
+          },
+        ],
+      },
+    },
+    "/depense/courbe/": {
+      meta: {},
+      data: {
+        exercice: 2026,
+        exercice_precedent: null,
+        date_situation: "2026-09-15",
+        points: [{ mois: 9, n: 0.5, n1: null, prorata: 0.75 }],
+        engage_serie: 50e9,
+        engage_situation: 50e9,
+        concordant: true,
+        methode: "Calcul sur les crédits du périmètre sélectionné",
+      },
+    },
+  });
+  const mensuel = vi.fn((extra: { piliers?: string }) => <p>Mensuel : {extra.piliers}</p>);
+  rendre(<CourbeExecution parMois={mensuel} />, "/depenses?nature=investissement&ministeres=14");
+  await screen.findByRole("option", { name: "Santé et bien-être" });
+  await userEvent.selectOptions(
+    screen.getByRole("combobox", { name: "Périmètre de la trajectoire" }),
+    "simandou",
+  );
+  await waitFor(() => {
+    const urls = api.mock.calls.map(([url]) => new URL(String(url), "http://localhost"));
+    expect(
+      urls.some(
+        (url) =>
+          url.pathname.endsWith("/courbe/") &&
+          url.searchParams.get("piliers") === "Sante et Bien-etre,Education et Culture" &&
+          url.searchParams.get("nature") === "investissement" &&
+          url.searchParams.get("ministeres") === "14",
+      ),
+    ).toBe(true);
+  });
+  await userEvent.click(screen.getByRole("radio", { name: "Par mois" }));
+  expect(mensuel).toHaveBeenLastCalledWith({ piliers: "Sante et Bien-etre,Education et Culture" });
+  await userEvent.selectOptions(screen.getByRole("combobox"), "Sante et Bien-etre");
+  expect(mensuel).toHaveBeenLastCalledWith({ piliers: "Sante et Bien-etre" });
+  await userEvent.selectOptions(screen.getByRole("combobox"), "");
+  expect(mensuel).toHaveBeenLastCalledWith({});
 });

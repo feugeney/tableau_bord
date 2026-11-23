@@ -81,3 +81,24 @@ def test_courbe_sans_dates_ne_fabrique_pas_un_taux_nul(charge):
     c = courbe(resoudre_filtres({}, "chaine_depense"))
     assert all(p["n"] is None for p in c["points"])
     assert c["concordant"] is False
+
+
+def test_trajectoire_simandou_utilise_les_credits_et_dossiers_du_pilier(charge):
+    from apps.depense.services import mensuel
+
+    lignes = FaitSituationLigne.objects.filter(chargement=charge)
+    lignes.update(attributs={"pilier_simandou": "2"})
+    lignes.filter(titre="2").update(attributs={"pilier_simandou": "5"})
+    f = resoudre_filtres({"piliers": "Sante et Bien-etre"}, "chaine_depense")
+    c = courbe(f)
+    dossiers = FaitEngagement.objects.filter(
+        chargement=charge, titre="2", date_creation__year=f.exercice, date_creation__lte=f.date_situation
+    )
+    attendu = sum((e.montant_engage for e in dossiers), Decimal(0))
+    credits = sum(l.credit_actuel for l in lignes.filter(titre="2"))
+    assert attendu > 0 and credits > 0
+    assert c["engage_serie"] == attendu
+    assert [p for p in c["points"] if p["n"] is not None][-1]["n"] == attendu / credits
+    assert mensuel(f)["rapprochement"]["reference"] == sum(l.credit_engage for l in lignes.filter(titre="2"))
+    tous = courbe(resoudre_filtres({"piliers": "Sante et Bien-etre,Education et Culture"}, "chaine_depense"))
+    assert tous["points"] == courbe(resoudre_filtres({}, "chaine_depense"))["points"]

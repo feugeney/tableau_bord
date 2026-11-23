@@ -150,7 +150,7 @@ function Contenu({ i, env }: { i: IndicateursDepense; env: Enveloppe<Indicateurs
       </Zone>
 
       <Zone titre="Tendance">
-        <CourbeExecution parMois={<BlocMensuel />} />
+        <CourbeExecution parMois={(extra) => <BlocMensuel extra={extra} />} />
       </Zone>
 
       <Zone titre="Détail">
@@ -609,8 +609,8 @@ export function BlocRepartitions({
   );
 }
 
-function BlocMensuel() {
-  const r = useDonnees<Mensuel>("/depense/mensuel/");
+function BlocMensuel({ extra = {} }: { extra?: { piliers?: string } }) {
+  const r = useDonnees<Mensuel>("/depense/mensuel/", extra);
   return (
     <Carte
       id="rythme"

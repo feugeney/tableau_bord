@@ -3,7 +3,7 @@
  * comparaison N−1, courbe d'exécution cumulée, matrice des ministères, concentration du non-engagé
  * et balance âgée des soldes non payés.
  */
-import { ArrowDown, ArrowRight, ArrowUp, Clock } from "lucide-react";
+import { ArrowDown, ArrowRight, ArrowUp, ChevronDown, Clock } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import {
   CartesianGrid,
@@ -22,6 +22,7 @@ import {
 } from "recharts";
 
 import { useDonnees } from "@/api/hooks";
+import { useFiltres } from "@/hooks/useFiltres";
 import type { IndicateursDepense, Meta, RestesAPayer, SectionLigne } from "@/api/types";
 import { HBarList } from "@/components/Barres";
 import { Note } from "@/components/Indicateurs";
@@ -163,8 +164,27 @@ interface Courbe {
 }
 
 /** Engagé cumulé en % des crédits, exercice courant et précédent ; prorata en simple repère. */
-export function CourbeExecution({ parMois }: { parMois: ReactNode }) {
-  const r = useDonnees<Courbe>("/depense/courbe/");
+export function CourbeExecution({
+  parMois,
+}: {
+  parMois: ReactNode | ((extra: { piliers?: string }) => ReactNode);
+}) {
+  const { filtres } = useFiltres();
+  const avecSimandou = typeof parMois === "function";
+  const [perimetre, setPerimetre] = useState("");
+  const definitions = useDonnees<{
+    criteres: { cle: string; valeurs: { code: string; libelle: string }[] }[];
+  }>("/depense/criteres/", {}, { actif: avecSimandou });
+  const piliers = definitions.data?.data?.criteres.find((c) => c.cle === "piliers")?.valeurs ?? [];
+  const codes = perimetre === "simandou" ? piliers.map((p) => p.code) : [perimetre];
+  const selectionPage = filtres.criteres.piliers;
+  const retenus = selectionPage?.length ? codes.filter((p) => selectionPage.includes(p)) : codes;
+  const extra = perimetre ? { piliers: retenus.join(",") || "__aucun_pilier__" } : {};
+  const libellePerimetre =
+    perimetre === "simandou"
+      ? "Simandou 2040 · tous les piliers"
+      : (piliers.find((p) => p.code === perimetre)?.libelle ?? "Ensemble des dépenses");
+  const r = useDonnees<Courbe>("/depense/courbe/", extra);
   const [vue, setVue] = useState<"cumul" | "mois">("cumul");
   return (
     <Carte
@@ -172,19 +192,58 @@ export function CourbeExecution({ parMois }: { parMois: ReactNode }) {
       titre="Trajectoire de l'engagement"
       sousTitre="Engagé cumulé en % des crédits, mois par mois · comparaison avec l'exercice précédent"
       actions={
-        <Segment<"cumul" | "mois">
-          libelle="Présentation"
-          valeur={vue}
-          options={[
-            { valeur: "cumul", libelle: "Cumul" },
-            { valeur: "mois", libelle: "Par mois" },
-          ]}
-          onChange={setVue}
-        />
+        <>
+          {avecSimandou && (
+            <label className="flex min-w-0 flex-col gap-1 text-sm text-ink-2">
+              Périmètre de la trajectoire
+              <span className="relative min-w-0 max-w-xs">
+                <select
+                  aria-label="Périmètre de la trajectoire"
+                  value={perimetre}
+                  onChange={(e) => setPerimetre(e.target.value)}
+                  className="min-h-8 w-full appearance-none rounded-sm border border-border bg-surface pl-2 pr-8 text-ink"
+                >
+                  <option value="">Ensemble des dépenses</option>
+                  <option value="simandou" disabled={!piliers.length}>
+                    Simandou 2040 · tous les piliers
+                  </option>
+                  {piliers.map((p) => (
+                    <option key={p.code} value={p.code}>
+                      {p.libelle}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown aria-hidden className="pointer-events-none absolute right-2 top-2 h-4 w-4" />
+              </span>
+            </label>
+          )}
+          <Segment<"cumul" | "mois">
+            libelle="Présentation"
+            valeur={vue}
+            options={[
+              { valeur: "cumul", libelle: "Cumul" },
+              { valeur: "mois", libelle: "Par mois" },
+            ]}
+            onChange={setVue}
+          />
+        </>
       }
     >
+      {avecSimandou && <p className="mb-3 text-sm font-bold text-ink">{libellePerimetre}</p>}
+      {avecSimandou && definitions.isError && (
+        <p role="alert" className="mb-3 text-sm text-ink-2">
+          Les piliers Simandou n'ont pas pu être chargés.{" "}
+          <button type="button" onClick={() => definitions.refetch()} className="underline">
+            Réessayer
+          </button>
+        </p>
+      )}
       {vue === "mois" ? (
-        parMois
+        typeof parMois === "function" ? (
+          parMois(extra)
+        ) : (
+          parMois
+        )
       ) : (
         <EtatBloc requete={r} hauteur="h-72">
           {(c) => {
@@ -201,7 +260,7 @@ export function CourbeExecution({ parMois }: { parMois: ReactNode }) {
                 <div
                   className="h-72 w-full"
                   role="img"
-                  aria-label={`Engagé cumulé en % des crédits, ${c.exercice} et ${c.exercice_precedent ?? "sans exercice précédent"}`}
+                  aria-label={`Engagé cumulé en % des crédits · ${libellePerimetre}, ${c.exercice} et ${c.exercice_precedent ?? "sans exercice précédent"}`}
                 >
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={donnees} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
