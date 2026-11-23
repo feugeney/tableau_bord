@@ -550,7 +550,15 @@ const MESURES_REPARTIES: { valeur: MesureRepartie; libelle: string; titre: strin
   { valeur: "paye", libelle: "Payé", titre: "Répartition du payé" },
 ];
 
-/** Cinq anneaux (pilier Simandou, titre, fonction, zone, BAS) ; un seul sélecteur choisit l'étape de la chaîne répartie. */
+const AXES_REPARTITION = [
+  "pilier",
+  "titre",
+  "fonction",
+  "zone",
+  // "type_budget", // BAS masqué pour laisser davantage de place aux autres répartitions.
+];
+
+/** Quatre anneaux (pilier Simandou, titre, fonction, zone) ; un seul sélecteur choisit la mesure répartie. */
 export function BlocRepartitions({
   titreActif,
   onTitre,
@@ -577,31 +585,33 @@ export function BlocRepartitions({
     >
       <EtatBloc requete={r} hauteur="h-72">
         {(d) => (
-          <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-5">
-            {d.axes.map((a) => (
-              <section key={a.axe} aria-labelledby={`repartition-${a.axe}`} className="min-w-0">
-                <h3 id={`repartition-${a.axe}`} className="etiquette mb-2">
-                  {a.titre}
-                  {a.axe !== "titre" && d.titre_filtre ? ` · titre ${d.titre_filtre}` : ""}
-                </h3>
-                {a.disponible ? (
-                  <Anneau
-                    libelle={`${choix.libelle} ${a.titre.toLowerCase()}`}
-                    // Parts retenues et couleurs fixées par l'engagé : basculer ne repeint rien.
-                    parts={plierParts(
-                      a.parts,
-                      (p) => p[mesure],
-                      (p) => p.engage,
-                      a.axe === "titre",
-                    )}
-                    onPart={a.axe === "titre" ? onTitre : undefined}
-                    actif={a.axe === "titre" ? titreActif : null}
-                  />
-                ) : (
-                  <p className="text-sm text-ink-2">{d.indisponible[a.axe] ?? "Non disponible."}</p>
-                )}
-              </section>
-            ))}
+          <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
+            {d.axes
+              .filter((a) => AXES_REPARTITION.includes(a.axe))
+              .map((a) => (
+                <section key={a.axe} aria-labelledby={`repartition-${a.axe}`} className="min-w-0">
+                  <h3 id={`repartition-${a.axe}`} className="etiquette mb-2">
+                    {a.titre}
+                    {a.axe !== "titre" && d.titre_filtre ? ` · titre ${d.titre_filtre}` : ""}
+                  </h3>
+                  {a.disponible ? (
+                    <Anneau
+                      libelle={`${choix.libelle} ${a.titre.toLowerCase()}`}
+                      // Parts retenues et couleurs fixées par l'engagé : basculer ne repeint rien.
+                      parts={plierParts(
+                        a.parts,
+                        (p) => p[mesure],
+                        (p) => p.engage,
+                        a.axe === "titre",
+                      )}
+                      onPart={a.axe === "titre" ? onTitre : undefined}
+                      actif={a.axe === "titre" ? titreActif : null}
+                    />
+                  ) : (
+                    <p className="text-sm text-ink-2">{d.indisponible[a.axe] ?? "Non disponible."}</p>
+                  )}
+                </section>
+              ))}
           </div>
         )}
       </EtatBloc>

@@ -36,7 +36,7 @@ it("place le pilier avant le titre et répartit les six mesures", async () => {
   rendre(<BlocRepartitions titreActif={null} onTitre={vi.fn()} />);
   expect(await screen.findByRole("heading", { name: "Par pilier Simandou" })).toBeInTheDocument();
   const titres = screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent);
-  expect(titres.slice(0, 2)).toEqual(["Par pilier Simandou", "Par titre"]);
+  expect(titres).toEqual(["Par pilier Simandou", "Par titre", "Par fonction", "Par zone"]);
   const pilier = screen.getByRole("heading", { name: "Par pilier Simandou" }).closest("section")!;
   for (const [libelle, total] of [
     ["Crédit", "100,0"],
